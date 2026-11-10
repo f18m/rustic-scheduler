@@ -48,7 +48,7 @@ def fetch(url: str) -> str:
 
 @pytest.fixture
 def pushgateway():
-    container = Container(PUSHGATEWAY_IMAGE, 9091)
+    container = Container(PUSHGATEWAY_IMAGE, 9091, host_gateway_access=True)
     try:
         container.wait_http("/-/ready")
         yield container

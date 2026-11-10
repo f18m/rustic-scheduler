@@ -36,13 +36,28 @@ class Container:
         *args: str,
         command: list[str] | None = None,
         fixed_port: bool = False,
+        host_gateway_access: bool = False,
     ) -> None:
         self.name = f"rs-test-{uuid.uuid4().hex[:10]}"
         self.internal_port = port
         # A fixed host port survives a container restart; a random one does not.
-        host_port = str(free_port()) if fixed_port else ""
+        host_port = str(free_port()) if fixed_port or host_gateway_access else ""
+        host_ips = ["127.0.0.1"]
+        if host_gateway_access:
+            host_ips.append(
+                docker(
+                    "network",
+                    "inspect",
+                    "bridge",
+                    "--format",
+                    "{{(index .IPAM.Config 0).Gateway}}",
+                )
+            )
+        publish_args = [
+            arg for host_ip in host_ips for arg in ("-p", f"{host_ip}:{host_port}:{port}")
+        ]
         docker(
-            "run", "-d", "--name", self.name, "-p", f"127.0.0.1:{host_port}:{port}",
+            "run", "-d", "--name", self.name, *publish_args,
             "--add-host", "host.docker.internal:host-gateway", *args, image, *(command or []),
         )  # fmt: skip
         try:

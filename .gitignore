@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tools/
+.smoke/
+dist/
+*.egg-info/
+# never commit real secrets
+examples/secrets/*
+!examples/secrets/*.example
+!examples/secrets/README.md
+.env
