@@ -1,0 +1,85 @@
+# rustic-scheduler example configuration.
+# Every setting is documented in docs/configuration.md. Only `jobs` is required.
+#
+# Nothing in this file is a secret. Passwords, AWS keys, MQTT passwords and
+# notification URLs live in mounted files (see examples/secrets/).
+
+scheduler:
+  timezone: Europe/Rome            # default for schedules that do not name one
+  state_dir: /var/lib/rustic-scheduler
+  missed_run_policy: catch_up      # or `skip`; see docs/behaviour.md
+  misfire_grace: 24h
+  stop_grace: 30s                  # time Rustic gets to stop on shutdown
+  log_level: INFO
+
+rustic:
+  profile_dir: /etc/rustic-scheduler/profiles
+  progress_interval: 5s
+  env:
+    # Non-secret settings for Rustic and OpenDAL. The files they point to are secrets.
+    AWS_SHARED_CREDENTIALS_FILE: /run/secrets/aws_credentials
+    AWS_CONFIG_FILE: /dev/null
+    AWS_EC2_METADATA_DISABLED: "true"
+
+http:
+  port: 9300
+
+# Rustic pushes its own rustic_backup_* metrics here after each snapshot.
+pushgateway:
+  url: http://pushgateway:9091
+  verify: true                     # confirm delivery by asking the Pushgateway
+  cleanup_stale_groups: false
+
+mqtt:
+  enabled: false
+  host: mosquitto
+  username: rustic-scheduler
+  password_file: /run/secrets/mqtt_password
+  topic_prefix: rustic-scheduler
+  tls:
+    enabled: false
+    # ca_file: /etc/rustic-scheduler/mqtt-ca.pem
+
+notifications:
+  enabled: false
+  config_files: [/run/secrets/apprise.conf]
+  events: [backup_success, backup_failure, maintenance_failure]
+
+jobs:
+  # Daily backup to S3 with Glacier Deep Archive as cold storage.
+  documents:
+    profiles: [s3-deep-archive, documents]   # earlier profiles win on conflicts
+    sources: [/data/documents]
+    schedule:
+      days: daily
+      times: ["02:30"]
+    backup:
+      timeout: 12h
+    snapshots:
+      enabled: true                # read-only telemetry after each backup
+    forget:
+      enabled: true
+      dry_run: true                # preview only: remove this line to really forget
+      keep:
+        keep-daily: 14
+        keep-weekly: 8
+        keep-monthly: 24
+      max_remove: 10               # refuse to remove more than this in one run
+      prune: false                 # pruning cold storage costs money; see docs/aws-s3-glacier.md
+    check:
+      enabled: true                # metadata only: never downloads archived data
+      schedule:
+        days: [sun]
+        times: ["05:00"]
+
+  # Two folders in one snapshot, three times a week, in another timezone.
+  media:
+    profiles: [s3-deep-archive, media]
+    sources: [/data/photos, /data/videos]
+    schedule:
+      days: [mon, wed, fri]
+      times: ["01:00"]
+      timezone: Europe/Rome
+    missed_run_policy: skip
+    snapshots:
+      enabled: true

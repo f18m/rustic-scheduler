@@ -1,0 +1,9 @@
+# Rustic profile with backup options for the `documents` job.
+# Listed after s3-deep-archive in the job, so on a conflict that profile wins.
+
+[backup]
+exclude-if-present = [".nobackup", "CACHEDIR.TAG"]
+globs = ["!**/*.tmp", "!**/.Trash*"]
+git-ignore = false
+one-file-system = true
+# Do not set `label` here: the scheduler labels snapshots with the job name.

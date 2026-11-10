@@ -1,0 +1,4 @@
+[repository]
+repository = "/var/lib/rustic-scheduler/e2e-repo"
+password-file = "/run/secrets/rustic_password"
+no-cache = true

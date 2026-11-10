@@ -1,0 +1,110 @@
+# rustic-scheduler with the Prometheus Pushgateway as a sidecar.
+#
+#   docker compose up -d                                   scheduler + Pushgateway
+#   docker compose --profile monitoring up -d              ... plus an example Prometheus
+#   docker compose --profile mqtt up -d                    ... plus an example MQTT broker
+#
+# Prometheus must scrape TWO endpoints: rustic-scheduler:9300 and pushgateway:9091
+# (see examples/prometheus/prometheus.yml).
+
+name: rustic-scheduler
+
+services:
+  rustic-scheduler:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: rustic-scheduler:0.1.0
+    # Rustic records the host name in every snapshot and groups snapshots by it.
+    # A fixed name keeps that stable when the container is recreated.
+    hostname: backup-host
+    restart: unless-stopped
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    # Lets Rustic (and only Rustic) read every file of the read-only source
+    # mounts. Remove it to run with no capabilities at all; files that UID 1000
+    # cannot read then fail to back up. Do not add `no-new-privileges`: it
+    # disables file capabilities. See docs/security.md.
+    cap_add:
+      - DAC_READ_SEARCH
+    # Longer than scheduler.stop_grace, so Rustic can stop cleanly.
+    stop_grace_period: 2m
+    environment:
+      TZ: Europe/Rome
+    volumes:
+      - ./examples/config.yaml:/etc/rustic-scheduler/config.yaml:ro
+      - ./examples/profiles:/etc/rustic-scheduler/profiles:ro
+      - state:/var/lib/rustic-scheduler
+      - cache:/var/cache/rustic
+      # Data to back up: always read-only.
+      - ${DOCUMENTS_DIR:-./examples/data/documents}:/data/documents:ro
+      - ${PHOTOS_DIR:-./examples/data/photos}:/data/photos:ro
+      - ${VIDEOS_DIR:-./examples/data/videos}:/data/videos:ro
+    secrets:
+      - rustic_password
+      - aws_credentials
+      - mqtt_password
+      - apprise.conf
+    ports:
+      - "127.0.0.1:9300:9300"
+    depends_on:
+      - pushgateway
+
+  pushgateway:
+    image: prom/pushgateway:v1.11.4@sha256:91a56b89b97dd8a5e1e4fa8b5bbbd86dd57a87a2a3cee3a3ce3368b40ef158ef
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    command:
+      # Without a persistence file every restart forgets all pushed metrics.
+      - --persistence.file=/pushgateway/metrics.db
+      - --persistence.interval=1m
+    volumes:
+      - pushgateway:/pushgateway
+    # Not published: only the scheduler and Prometheus need to reach it, and
+    # anyone who can reach it can overwrite or delete metrics.
+    expose:
+      - "9091"
+
+  prometheus:
+    profiles: [monitoring]
+    image: prom/prometheus:v3.16.0
+    restart: unless-stopped
+    volumes:
+      - ./examples/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./examples/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+
+  mosquitto:
+    profiles: [mqtt]
+    image: eclipse-mosquitto:2.1.2-alpine
+    restart: unless-stopped
+    volumes:
+      - ./examples/mosquitto:/mosquitto/config
+      - mosquitto:/mosquitto/data
+    expose:
+      - "1883"
+
+secrets:
+  rustic_password:
+    file: ./examples/secrets/rustic_password
+  aws_credentials:
+    file: ./examples/secrets/aws_credentials
+  mqtt_password:
+    file: ./examples/secrets/mqtt_password
+  apprise.conf:
+    file: ./examples/secrets/apprise.conf
+
+volumes:
+  state:
+  cache:
+  pushgateway:
+  prometheus:
+  mosquitto:

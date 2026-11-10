@@ -1,0 +1,7 @@
+# Rustic profile for a local repository; handy for a first test without AWS.
+#   docker compose exec rustic-scheduler rustic -P /etc/rustic-scheduler/profiles/local-test.toml init
+
+[repository]
+repository = "/var/lib/rustic-scheduler/test-repo"
+password-file = "/run/secrets/rustic_password"
+no-cache = true

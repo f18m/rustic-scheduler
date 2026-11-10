@@ -1,0 +1,13 @@
+scheduler:
+  timezone: UTC
+rustic:
+  progress_interval: 1s
+pushgateway:
+  url: http://pushgateway:9091
+jobs:
+  demo:
+    profiles: [repo, options]
+    sources: [/data/source]
+    schedule: {days: daily, times: ["03:00"]}
+    snapshots: {enabled: true}
+    check: {enabled: true, after_backup: true}

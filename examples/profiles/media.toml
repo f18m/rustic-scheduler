@@ -1,0 +1,6 @@
+# Rustic profile with backup options for the `media` job.
+
+[backup]
+exclude-if-present = [".nobackup"]
+globs = ["!**/Thumbs.db", "!**/.DS_Store"]
+tags = ["media"]

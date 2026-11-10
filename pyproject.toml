@@ -1,0 +1,67 @@
+[project]
+name = "rustic-scheduler"
+version = "0.1.0"
+description = "Schedules Rustic backups from YAML, with Prometheus, MQTT and Apprise reporting"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp>=3.11,<4",
+    "aiomqtt>=2.3,<3",
+    "apprise>=1.9",
+    "prometheus-client>=0.21",
+    "pydantic>=2.9,<3",
+    "pyyaml>=6.0.2",
+    "tzdata>=2025.1",
+]
+
+[project.scripts]
+rustic-scheduler = "rustic_scheduler.cli:main"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "ruff>=0.8",
+    "types-pyyaml>=6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rustic_scheduler"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+pythonpath = ["tests"]
+markers = [
+    "integration: needs the pinned rustic binary",
+    "docker: additionally needs a Docker daemon",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "tests/integration"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "ASYNC", "S", "PT"]
+ignore = ["S101", "S603", "S607", "ASYNC109", "ASYNC110", "SIM105"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests favour compact, readable assertions over these style rules.
+"tests/**" = ["S", "ASYNC", "PT018", "PT011", "E501", "E741", "RUF059"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src"]
+
+[[tool.mypy.overrides]]
+module = ["apprise.*"]
+ignore_missing_imports = true

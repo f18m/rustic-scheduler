@@ -1,0 +1,45 @@
+# End-to-end stack: the real image, the Pushgateway sidecar and a real
+# Prometheus using the example scrape configuration. Local repository only.
+name: rustic-scheduler-e2e
+
+services:
+  rustic-scheduler:
+    image: ${IMAGE:-rustic-scheduler:e2e}
+    hostname: e2e-host
+    user: "1000:1000"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    cap_add: [DAC_READ_SEARCH]
+    stop_grace_period: 1m
+    volumes:
+      - ./config.yaml:/etc/rustic-scheduler/config.yaml:ro
+      - ./profiles:/etc/rustic-scheduler/profiles:ro
+      - state:/var/lib/rustic-scheduler
+      - source:/data/source:ro
+    secrets: [rustic_password]
+    depends_on: [pushgateway]
+
+  pushgateway:
+    image: prom/pushgateway:v1.11.4
+    read_only: true
+    cap_drop: [ALL]
+    command: ["--persistence.file=/pushgateway/metrics.db", "--persistence.interval=1s"]
+    volumes: [pushgateway:/pushgateway]
+
+  prometheus:
+    image: prom/prometheus:v3.16.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../../examples/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports: ["127.0.0.1::9090"]
+
+secrets:
+  rustic_password:
+    file: ./rustic_password
+
+volumes:
+  state:
+  source:
+  pushgateway:

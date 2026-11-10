@@ -1,0 +1,31 @@
+# Rustic profile: hot/cold repository on AWS S3, cold part in Glacier Deep Archive.
+# This is a plain Rustic profile. Anything Rustic accepts may be added here;
+# rustic-scheduler does not restrict or rewrite it.
+# Reference: https://github.com/rustic-rs/rustic/blob/main/config/README.md
+#
+# No credentials in this file. AWS keys come from the shared credentials file
+# named by AWS_SHARED_CREDENTIALS_FILE; the repository password from a file.
+
+[repository]
+repository = "opendal:s3"        # cold: every repository file
+repo-hot = "opendal:s3"          # hot: config, keys, snapshots, index and tree packs
+password-file = "/run/secrets/rustic_password"
+cache-dir = "/var/cache/rustic"
+
+# Needed only to RESTORE (or to `check --read-data`): ask S3 to thaw each pack,
+# then wait. Bulk retrievals from Deep Archive take up to 48 hours.
+# See docs/restore.md before relying on this; it has not been tested against AWS.
+# warm-up-command = "aws s3api restore-object --bucket CHANGE-ME-backup-bucket --key %path --restore-request Days=7,GlacierJobParameters={Tier=Bulk}"
+# warm-up-wait = "48h"
+
+# Options shared by the hot and the cold part.
+[repository.options]
+bucket = "CHANGE-ME-backup-bucket"
+region = "eu-west-1"
+
+[repository.options-hot]
+root = "/hot"
+
+[repository.options-cold]
+root = "/cold"
+default_storage_class = "DEEP_ARCHIVE"

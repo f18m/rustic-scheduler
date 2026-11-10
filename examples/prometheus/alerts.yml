@@ -1,0 +1,42 @@
+groups:
+  - name: rustic-scheduler
+    rules:
+      - alert: RusticSchedulerNotReady
+        expr: rustic_scheduler_ready == 0 or absent(rustic_scheduler_ready)
+        for: 5m
+        annotations:
+          summary: rustic-scheduler cannot launch scheduled backups
+
+      - alert: RusticBackupNotSucceeded
+        expr: rustic_scheduler_operation_last_outcome{operation="backup", outcome!="succeeded"} == 1
+        for: 10m
+        annotations:
+          summary: "Backup {{ $labels.backup_job }} last ended as {{ $labels.outcome }}"
+
+      # Adjust the threshold to the job's schedule.
+      - alert: RusticBackupTooOld
+        expr: time() - rustic_scheduler_operation_last_success_timestamp_seconds{operation="backup"} > 2 * 86400
+        annotations:
+          summary: "No successful backup of {{ $labels.backup_job }} for two days"
+
+      - alert: RusticSnapshotTelemetryStale
+        expr: time() - rustic_scheduler_snapshot_collection_timestamp_seconds > 3 * 86400
+        annotations:
+          summary: "Snapshot telemetry of {{ $labels.backup_job }} has not been refreshed"
+
+      - alert: RusticMaintenanceFailed
+        expr: rustic_scheduler_operation_last_outcome{operation=~"forget|prune|check", outcome=~"failed|unknown|interrupted"} == 1
+        for: 10m
+        annotations:
+          summary: "{{ $labels.operation }} of {{ $labels.backup_job }} ended as {{ $labels.outcome }}"
+
+      - alert: RusticMetricsNotDelivered
+        expr: rustic_scheduler_pushgateway_push_verified == 0
+        for: 10m
+        annotations:
+          summary: "Rustic's own metrics for {{ $labels.backup_job }} did not reach the Pushgateway"
+
+      - alert: RusticNotificationsFailing
+        expr: increase(rustic_scheduler_notifications_total{result="failed"}[1h]) > 0
+        annotations:
+          summary: Backup notifications are not being delivered
