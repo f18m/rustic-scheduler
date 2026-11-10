@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.25"
+      - run: uv sync --frozen
+      - run: uv run ruff format --check src tests
+      - run: uv run ruff check src tests
+      - run: uv run mypy
+
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.25"
+          python-version: ${{ matrix.python }}
+      - run: uv sync --frozen
+      - name: Install the pinned Rustic binary (checksum verified)
+        run: ./scripts/install-rustic.sh .tools
+      - name: Unit and integration tests (real Rustic, Pushgateway, Prometheus, Mosquitto, S3 server)
+        run: uv run pytest -v
+        env:
+          REQUIRE_INTEGRATION: "1"
+
+  image:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: End-to-end test of the built image
+        run: ./tests/e2e/run.sh
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Build for both supported architectures
+        run: docker buildx build --platform linux/amd64,linux/arm64 -f docker/Dockerfile .
