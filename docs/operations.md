@@ -10,8 +10,9 @@ docker buildx build --platform linux/amd64,linux/arm64 -f docker/Dockerfile -t r
 - Platforms: `linux/amd64` and `linux/arm64`. Rustic also publishes `armv7` and `i686`
   builds, but they are not wired into the Dockerfile.
 - CI publishes `ghcr.io/<owner>/rustic-scheduler` on pushes to `main`, tagged `main`,
-  `latest`, and `sha-<commit>`, and on published GitHub releases using the release's Git tag.
-  Pull requests build and test the image without publishing it.
+  `latest`, and `sha-<commit>`, and on published GitHub releases using the exact release Git
+  tag (for example, release `0.1.1` publishes `:0.1.1`). Pull requests build and test the
+  image without publishing it.
 - Reproducibility: base and uv images pinned by digest; Rustic 0.11.4 pinned by SHA-256;
   Python dependencies installed from `uv.lock` with `--frozen`. The same sources give the
   same dependency set. Image bytes are not bit-for-bit identical between builds (Debian
