@@ -9,6 +9,8 @@ docker buildx build --platform linux/amd64,linux/arm64 -f docker/Dockerfile -t r
 
 - Platforms: `linux/amd64` and `linux/arm64`. Rustic also publishes `armv7` and `i686`
   builds, but they are not wired into the Dockerfile.
+- CI publishes `ghcr.io/<owner>/rustic-scheduler` on pushes to `main`, tagged `main`,
+  `latest`, and `sha-<commit>`. Pull requests build and test the image without publishing it.
 - Reproducibility: base and uv images pinned by digest; Rustic 0.11.4 pinned by SHA-256;
   Python dependencies installed from `uv.lock` with `--frozen`. The same sources give the
   same dependency set. Image bytes are not bit-for-bit identical between builds (Debian
@@ -136,4 +138,4 @@ just e2e           # build the image; test it with Pushgateway and Prometheus
 
 `.github/workflows/ci.yml` runs lint, the full test suite on Python 3.12 and 3.13 with the
 real Rustic binary and the service containers, the image end-to-end test, and a build for
-both architectures.
+both architectures. Pushes to `main` publish that multi-architecture image to GHCR.
