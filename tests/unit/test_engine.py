@@ -59,6 +59,23 @@ async def test_nonzero_exit_is_failed_with_the_error_as_detail(sandbox):
     )
 
 
+async def test_non_terminal_error_in_backup_result(sandbox):
+    sandbox.write_plan({"backup": {"exit": 1, "stderr": ["error: IO error: not a terminal"]}})
+    result = await run(await sandbox.engine())
+    assert result.outcome == Outcome.FAILED and result.reason == Reason.EXIT_CODE
+    assert "not a terminal" in result.detail
+    assert "password-file" in result.detail
+
+
+async def test_non_terminal_hint_survives_long_stderr(sandbox):
+    stderr = ["error: IO error: not a terminal"] + [f"[INFO] line {i}" for i in range(50)]
+    sandbox.write_plan({"backup": {"exit": 1, "stderr": stderr}})
+    result = await run(await sandbox.engine())
+    assert result.outcome == Outcome.FAILED
+    assert "password-file" in result.detail
+    assert len(result.detail) <= 600
+
+
 async def test_summary_but_nonzero_exit_is_still_failed(sandbox):
     # One of several snapshots failed: Rustic prints a summary and exits 1.
     sandbox.write_plan({"backup": {"stdout": [SUMMARY], "exit": 1}})
@@ -766,6 +783,15 @@ async def test_without_state_a_recent_snapshot_means_nothing_was_missed(sandbox)
     recent = snapshots_json(snapshot("docs", "2026-06-01T02:00:05Z"))
     await start_after_downtime(sandbox, snapshots={"stdout": [recent]})
     assert [e["command"] for e in sandbox.journal()] == ["snapshots"]
+
+
+async def test_catch_up_snapshot_failure_includes_non_terminal_hint(sandbox, caplog):
+    await start_after_downtime(
+        sandbox, snapshots={"exit": 1, "stderr": ["error: IO error: not a terminal"]}
+    )
+    assert [e["command"] for e in sandbox.journal()] == ["snapshots"]
+    assert "cannot tell whether a run was missed" in caplog.text
+    assert "password-file" in caplog.text
 
 
 @pytest.mark.parametrize("listing", [{"stdout": [snapshots_json()]}, {"exit": 1}])

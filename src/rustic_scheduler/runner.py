@@ -27,6 +27,12 @@ from .redact import REDACTOR
 log = logging.getLogger(__name__)
 
 INTERRUPT_MARKER = "Ctrl-C received"
+NON_TERMINAL_ERROR = "error: IO error: not a terminal"
+NON_TERMINAL_HINT = (
+    "[WARN] Rustic or a hook may have tried to prompt without a terminal. "
+    "Configure a repository password using [repository] password-file or password-command, "
+    "or make hooks non-interactive."
+)
 _TAIL_LINES = 40
 _MAX_CAPTURE = 512 * 1024 * 1024
 #: Longer output lines are shortened in logs.
@@ -42,6 +48,8 @@ class ProcessResult:
     stopped_by_scheduler: bool = False
     #: Rustic reported that it received a termination signal.
     saw_interrupt: bool = False
+    #: Rustic reported a non-interactive terminal error.
+    saw_non_terminal_error: bool = False
     #: Parsed JSON objects from stdout, in order (only in `ndjson` mode).
     messages: list[dict[str, Any]] = field(default_factory=list)
     #: Raw stdout (only in `capture` mode).
@@ -176,6 +184,9 @@ async def run_process(
         assert process.stderr is not None
         async for line in _lines(process.stderr):
             record(line, "stderr")
+            if not result.saw_non_terminal_error and line.strip() == NON_TERMINAL_ERROR:
+                result.saw_non_terminal_error = True
+                record(NON_TERMINAL_HINT, "stderr")
 
     readers = asyncio.gather(read_stdout(), read_stderr())
     waiter = asyncio.ensure_future(process.wait())

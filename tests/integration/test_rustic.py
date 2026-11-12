@@ -100,6 +100,29 @@ async def test_wrong_password_is_a_failed_backup_and_is_not_logged(real):
     assert "not-the-password-123" not in Path(result.log_file).read_text()
 
 
+async def test_missing_password_reports_non_terminal_hint(real, monkeypatch, caplog):
+    monkeypatch.delenv("RUSTIC_PASSWORD", raising=False)
+    monkeypatch.delenv("RUSTIC_PASSWORD_FILE", raising=False)
+    real.profile("repo", f'[repository]\nrepository = "{real.repo}"\nno-cache = true\n')
+    engine = await real.engine()
+
+    result = await run(engine, operation=Operation.SNAPSHOTS)
+
+    assert result.outcome == Outcome.FAILED and result.reason == Reason.EXIT_CODE
+    assert "not a terminal" in result.detail
+    assert "password-file" in result.detail
+    assert "password-command" in caplog.text
+    assert "password-file" in Path(result.log_file).read_text()
+
+    real.profile(
+        "repo",
+        f'[repository]\nrepository = "{real.repo}"\n'
+        f'password-file = "{real.password_file}"\nno-cache = true\n',
+    )
+    result = await run(await real.engine(), operation=Operation.SNAPSHOTS)
+    assert result.outcome == Outcome.SUCCEEDED
+
+
 async def test_unchanged_source_with_skip_if_unchanged_saves_no_snapshot(real):
     job = real.job(backup={"extra_args": ["--skip-if-unchanged"]})
     engine = await real.engine(real.config({"docs": job}))

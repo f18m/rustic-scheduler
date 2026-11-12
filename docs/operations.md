@@ -95,6 +95,7 @@ interrupts it; check `status` first.
 
 | Symptom | Likely cause |
 |---|---|
+| `error: IO error: not a terminal` | Rustic may be prompting for a repository password: set `[repository] password-file` or `password-command` in a profile. A hook may also be trying to prompt; make it non-interactive. |
 | `failed` / `exit_code`, "signing http request" | AWS credentials missing or unreadable by UID 1000 |
 | `failed` / `exit_code`, permission denied on a source file | No `DAC_READ_SEARCH` capability and the file is not readable by the container user |
 | `failed` / `spawn_error`, "Operation not permitted" | `rustic.binary` points at the capability copy but the container lacks `cap_add: [DAC_READ_SEARCH]`, or `no-new-privileges` is set |

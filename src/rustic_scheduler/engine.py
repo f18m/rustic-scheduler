@@ -38,7 +38,7 @@ from .mqtt import MqttPublisher
 from .notify import Notifier
 from .pushgateway import PushgatewayClient
 from .redact import REDACTOR
-from .runner import ProcessResult, run_process
+from .runner import NON_TERMINAL_HINT, ProcessResult, run_process
 from .schedule import Schedule
 from .state import StateStore
 
@@ -106,9 +106,13 @@ def _error_lines(process: ProcessResult) -> str:
     noise = ("Backtrace", "disabled backtrace", "Some additional details")
     lines = [line.strip() for line in process.stderr_tail if line.strip()]
     lines = [line for line in lines if not line.startswith(noise)]
+    lines = [line for line in lines if line != NON_TERMINAL_HINT]
     errors = [line for line in lines if "ERROR" in line or "error" in line.lower()]
     chosen = errors[-3:] or lines[-3:]
     text = " | ".join(re.sub(r"\x1b\[[0-9;]*m", "", line) for line in chosen)
+    if process.saw_non_terminal_error:
+        detail = text or f"Rustic exited with status {process.exit_code}"
+        return f"{detail[: 600 - len(NON_TERMINAL_HINT) - 3]} | {NON_TERMINAL_HINT}"
     return text[:600] or f"Rustic exited with status {process.exit_code}"
 
 

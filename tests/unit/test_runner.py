@@ -72,6 +72,26 @@ async def test_interrupt_marker_is_detected():
     assert (await run(code)).saw_interrupt
 
 
+async def test_non_terminal_error_logs_actionable_hint_once(tmp_path, caplog):
+    log_file = tmp_path / "run.log"
+    code = "import sys;sys.stderr.write('error: IO error: not a terminal\\n' * 2);sys.exit(1)"
+    result = await run(code, mode="capture", log_file=log_file, name="rustic[docs]")
+    assert result.exit_code == 1
+    assert "error: IO error: not a terminal" in result.tail
+    for text in (caplog.text, log_file.read_text(), result.tail):
+        assert text.count("password-file") == 1
+        assert "password-command" in text
+        assert "hook" in text
+    assert "rustic[docs]" in caplog.text
+
+
+async def test_other_errors_do_not_log_non_terminal_hint(caplog):
+    result = await run("import sys;sys.stderr.write('error: permission denied\\n');sys.exit(1)")
+    assert result.exit_code == 1
+    assert "password-file" not in result.tail
+    assert "password-file" not in caplog.text
+
+
 async def test_child_processes_are_stopped_with_the_group():
     code = (
         "import subprocess,sys,time;"
