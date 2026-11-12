@@ -14,6 +14,7 @@ from aiohttp import web
 from prometheus_client.parser import text_string_to_metric_families
 
 from helpers import SUMMARY, metric
+from rustic_scheduler.app import connect_mqtt_features
 from rustic_scheduler.config import MqttConfig
 from rustic_scheduler.httpserver import HttpServer
 from rustic_scheduler.metrics import Metrics
@@ -392,6 +393,122 @@ async def test_mqtt_reconnects_and_wrong_credentials_never_block_backups(real, b
     broker.start()
     assert await connected(publisher, 30), "the publisher did not reconnect"
     await publisher.stop(task)
+
+
+async def send(port: int, topic: str, payload: str, retain: bool = False) -> None:
+    async with aiomqtt.Client(
+        "127.0.0.1", port, username="scheduler", password="s3cret-mqtt-pw"
+    ) as client:
+        await client.publish(topic, payload, qos=1, retain=retain)
+
+
+async def until(condition, timeout: float = 30) -> bool:
+    deadline = time.time() + timeout
+    while not condition() and time.time() < deadline:
+        await asyncio.sleep(0.1)
+    return bool(condition())
+
+
+@pytest.mark.docker
+async def test_mqtt_commands_and_home_assistant_discovery_through_a_real_broker(real, broker):
+    prefix = "test/backup"
+    mqtt = {
+        "enabled": True, "host": "127.0.0.1", "port": broker.port, "username": "scheduler",
+        "password_file": str(broker.password_file), "topic_prefix": prefix, "max_reconnect_delay": 1,
+        "connect_timeout": 3, "keepalive": 2,
+        "commands": {"enabled": True, "operations": ["backup", "forget"]},
+        "homeassistant": {"enabled": True},
+    }  # fmt: skip
+    forget = {"enabled": True, "keep": {"keep-last": 1}, "after_backup": False}
+    config = real.config({"docs": real.job(forget=forget)}, mqtt=mqtt)
+    # A retained command left on the broker must not start anything, now or at a reconnect.
+    await send(broker.port, f"{prefix}/jobs/docs/backup/run", "run", retain=True)
+
+    publisher = MqttPublisher(config.mqtt, Metrics())
+    engine = await real.engine(config, mqtt=publisher)
+    connect_mqtt_features(config, engine, publisher, engine.metrics)
+    publisher_task = asyncio.create_task(publisher.run())
+    assert await connected(publisher)
+    messages: list = []
+    ready = asyncio.Event()
+    collector = asyncio.create_task(collect(broker.port, prefix, messages, ready))
+    await asyncio.wait_for(ready.wait(), 15)
+
+    def count(result: str) -> float:
+        return metric(engine.metrics, "rustic_scheduler_mqtt_commands_total", {"result": result})
+
+    assert await until(lambda: count("invalid") == 1)
+    assert real.snapshots() == [] and count("accepted") == 0
+
+    def last(operation: Operation):
+        return engine.last_results.get(("docs", operation))
+
+    # Two backups by message, so that forget has something to remove.
+    for expected in (1, 2):
+        await send(broker.port, f"{prefix}/jobs/docs/backup/run", "run")
+        assert await until(lambda n=expected: len(real.snapshots("docs")) == n)
+        await engine.wait_idle()
+        (real.source / "a.txt").write_text(f"changed {expected}\n")
+    assert last(Operation.BACKUP).outcome == Outcome.SUCCEEDED
+    assert last(Operation.BACKUP).trigger == Trigger.MQTT
+
+    # check is not among the allowed operations: refused, and reported as an event.
+    await send(broker.port, f"{prefix}/jobs/docs/check/run", "run")
+    assert await until(lambda: count("rejected") == 1)
+    assert last(Operation.CHECK) is None
+
+    await send(broker.port, f"{prefix}/jobs/docs/forget/run", "run")
+    assert await until(lambda: last(Operation.FORGET) is not None)
+    await engine.wait_idle()
+    assert last(Operation.FORGET).outcome == Outcome.SUCCEEDED
+    assert last(Operation.FORGET).data["removed"] == 1 and len(real.snapshots("docs")) == 1
+    await asyncio.sleep(1)
+
+    by_topic: dict[str, list] = {}
+    for topic, payload, _ in messages:
+        by_topic.setdefault(topic, []).append(payload)
+    states = by_topic[f"{prefix}/jobs/docs/backup/state"]
+    assert states[-6:] == ["queued", "running", "idle"] * 2
+    assert by_topic[f"{prefix}/jobs/docs/forget/state"][-1] == "idle"
+    rejected = json.loads(by_topic[f"{prefix}/jobs/docs/check/event"][-1])
+    assert rejected["event"] == "rejected" and rejected["trigger"] == "mqtt"
+
+    async def discovered() -> dict[str, dict]:
+        found: list = []
+        found_ready = asyncio.Event()
+        task = asyncio.create_task(collect(broker.port, "homeassistant", found, found_ready))
+        await asyncio.wait_for(found_ready.wait(), 15)
+        await asyncio.sleep(1)
+        task.cancel()
+        assert all(retain for _, _, retain in found)
+        return {topic: json.loads(payload) for topic, payload, _ in found}
+
+    entities = await discovered()
+    node = "homeassistant/{}/rustic_scheduler/docs_{}/config"
+    assert entities[node.format("button", "backup_run")]["command_topic"] == (
+        f"{prefix}/jobs/docs/backup/run"
+    )
+    assert node.format("button", "forget_run") in entities
+    assert node.format("button", "check_run") not in entities
+    outcome = entities[node.format("sensor", "forget_outcome")]
+    assert outcome["state_topic"] == f"{prefix}/jobs/docs/forget/result"
+    assert outcome["availability_topic"] == f"{prefix}/status"
+
+    # A lost connection is noticed without anything being published, and after the broker
+    # comes back (empty: it keeps nothing) discovery and the subscription are restored.
+    broker.stop()
+    assert await until(lambda: not publisher.connected, 20)
+    broker.start()
+    assert await connected(publisher, 30), "the publisher did not reconnect"
+    await asyncio.sleep(1)  # discovery is sent right after connecting
+    assert await discovered() == entities
+    await send(broker.port, f"{prefix}/jobs/docs/backup/run", "run")
+    assert await until(lambda: count("accepted") == 4)
+    await engine.wait_idle()
+    assert len(real.snapshots("docs")) == 2
+
+    collector.cancel()
+    await publisher.stop(publisher_task)
 
 
 @pytest.mark.docker

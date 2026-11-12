@@ -146,6 +146,11 @@ Unix socket in the state directory (mode 0600). A manual run:
 
 Without `--wait` the command reports only that the run was queued, which is not a result.
 
+With `mqtt.commands.enabled`, an MQTT message starts a run under the same rules, limited to
+the operations listed in `mqtt.commands.operations`; its trigger is `mqtt`. One difference: a
+message for an operation that is already queued or running is refused without recording a
+skipped run. See [mqtt.md](mqtt.md#commands).
+
 ## Retries
 
 `retries` repeats an operation after a plain failure (non-zero exit), waiting `retry_delay`

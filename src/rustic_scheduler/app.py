@@ -16,9 +16,11 @@ from . import SUPPORTED_RUSTIC_VERSION, __version__
 from .commands import JobRuntime, build_env, make_runtime
 from .config import Config, ConfigError, load_config
 from .engine import Engine
+from .homeassistant import discovery_messages
 from .httpserver import HttpServer
 from .metrics import Metrics
 from .mqtt import MqttPublisher
+from .mqtt_commands import CommandHandler
 from .notify import Notifier
 from .profiles import ProfileError, analyse, profile_args, show_config
 from .redact import RedactingFilter
@@ -140,6 +142,23 @@ def setup_logging(level: str = "INFO", style: str = "text") -> None:
     root.setLevel(level)
 
 
+def connect_mqtt_features(
+    config: Config, engine: Engine, mqtt: MqttPublisher, metrics: Metrics
+) -> None:
+    """Enable MQTT commands and Home Assistant discovery where configured."""
+    if config.mqtt.commands.enabled:
+        handler = CommandHandler(engine, mqtt, config.mqtt.commands, metrics)
+        handler.attach(mqtt)
+        log.info(
+            "MQTT commands enabled on %s for: %s",
+            handler.topic_filter,
+            ", ".join(config.mqtt.commands.operations) or "nothing",
+        )
+    if config.mqtt.homeassistant.enabled:
+        operations = {name: engine.enabled_operations(name) for name in engine.runtimes}
+        mqtt.birth = discovery_messages(config.mqtt, operations)
+
+
 async def serve(config_path: Path) -> int:
     """Run the scheduler until SIGTERM or SIGINT."""
     try:
@@ -162,6 +181,8 @@ async def serve(config_path: Path) -> int:
     notifier = Notifier(config.notifications, metrics) if config.notifications.enabled else None
     engine = Engine(config, runtimes, metrics, state, mqtt=mqtt, notifier=notifier)
     server = HttpServer(engine, config.http.host, config.http.port, state.control_socket)
+    if mqtt:
+        connect_mqtt_features(config, engine, mqtt, metrics)
 
     loop = asyncio.get_running_loop()
     stop = asyncio.Event()

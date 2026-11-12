@@ -1,9 +1,12 @@
-"""Optional MQTT publisher.
+"""Optional MQTT connection: publishing, and receiving command messages.
 
 Publishing is fire-and-forget from the engine's point of view: messages go into
 a bounded in-memory queue and a background task delivers them. A broker that is
 slow, down or misconfigured can therefore never delay or fail a backup; it only
 shows up in ``rustic_scheduler_mqtt_*`` metrics and in the log.
+
+Incoming messages are handed to ``on_message``; what they mean is decided in
+:mod:`rustic_scheduler.mqtt_commands`.
 """
 
 from __future__ import annotations
@@ -12,6 +15,7 @@ import asyncio
 import json
 import logging
 import ssl
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -41,6 +45,12 @@ class MqttPublisher:
         self._queue: asyncio.Queue[_Message | None] = asyncio.Queue(maxsize=config.queue_size)
         self._pending: _Message | None = None
         self._stopping = False
+        #: Topic filters subscribed to after every connection.
+        self.subscriptions: list[str] = []
+        #: Called with topic, payload and the retained flag of each received message.
+        self.on_message: Callable[[str, bytes, bool], None] | None = None
+        #: Retained messages published after every connection (topic, payload).
+        self.birth: list[tuple[str, str]] = []
         metrics.mqtt_connected.set(0)
 
     def topic(self, *parts: str) -> str:
@@ -88,6 +98,33 @@ class MqttPublisher:
         REDACTOR.register([password])
         return password
 
+    async def _receive(self, client: aiomqtt.Client) -> None:
+        """Dispatch incoming messages. Ends with an error when the connection is lost."""
+        async for message in client.messages:
+            payload = message.payload
+            if self.on_message is None or not isinstance(payload, bytes | bytearray):
+                continue
+            try:
+                self.on_message(str(message.topic), bytes(payload), bool(message.retain))
+            except Exception:
+                log.exception("handling an MQTT message on %s failed", message.topic)
+        raise aiomqtt.MqttError("the message stream ended")
+
+    async def _next(self, reader: asyncio.Task[None]) -> _Message | None:
+        """The next message to send; raises when the connection is lost meanwhile."""
+        if self._pending is not None:
+            return self._pending
+        getter = asyncio.ensure_future(self._queue.get())
+        try:
+            await asyncio.wait({getter, reader}, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            if not getter.done():
+                getter.cancel()
+        if getter.done() and not getter.cancelled():
+            return getter.result()
+        reader.result()  # raises the connection error
+        raise aiomqtt.MqttError("the message stream ended")
+
     async def run(self) -> None:
         """Connect, deliver queued messages and reconnect with backoff, forever."""
         cfg = self.config
@@ -111,18 +148,30 @@ class MqttPublisher:
                     self.connected = True
                     self.metrics.mqtt_connected.set(1)
                     delay = 1.0
+                    for topic, payload in self.birth:
+                        await client.publish(topic, payload, qos=1, retain=True)
                     await client.publish(status, "online", qos=1, retain=True)
-                    while True:
-                        message = self._pending or await self._queue.get()
-                        if message is None:
-                            await client.publish(status, "offline", qos=1, retain=True)
-                            return
-                        self._pending = None if message.droppable else message
-                        await client.publish(
-                            message.topic, message.payload, qos=message.qos, retain=message.retain
-                        )
-                        self._pending = None
-                        self.metrics.mqtt_messages.labels("published").inc()
+                    for topic_filter in self.subscriptions:
+                        await client.subscribe(topic_filter, qos=1)
+                    reader = asyncio.create_task(self._receive(client), name="mqtt-receive")
+                    try:
+                        while True:
+                            message = await self._next(reader)
+                            if message is None:
+                                await client.publish(status, "offline", qos=1, retain=True)
+                                return
+                            self._pending = None if message.droppable else message
+                            await client.publish(
+                                message.topic,
+                                message.payload,
+                                qos=message.qos,
+                                retain=message.retain,
+                            )
+                            self._pending = None
+                            self.metrics.mqtt_messages.labels("published").inc()
+                    finally:
+                        reader.cancel()
+                        await asyncio.gather(reader, return_exceptions=True)
             except (aiomqtt.MqttError, OSError, ssl.SSLError) as exc:
                 self.metrics.mqtt_messages.labels("connection_error").inc()
                 log.warning(

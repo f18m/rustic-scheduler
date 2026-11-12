@@ -1,0 +1,12 @@
+.git
+.venv
+.tools
+.smoke
+**/__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+tests
+docs
+examples
+dist

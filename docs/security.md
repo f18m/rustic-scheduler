@@ -114,8 +114,14 @@ only what should be backed up.
 | 9300 | read-only metrics, health, status JSON | binding to loopback or a private network. Status includes job names, source paths in error text and timings. There is no authentication. |
 | Pushgateway 9091 | read **and write** of pushed metrics | not publishing it; see [metrics.md](metrics.md#securing-it) |
 | Control socket | manual triggers | file mode 0600 in the state volume; not reachable over the network |
+| MQTT command topic (only with `mqtt.commands.enabled`) | starting the operations listed in `mqtt.commands.operations` | broker authentication, a broker ACL on `<prefix>/jobs/+/+/run`, TLS |
 
-Nothing reachable over TCP can start, stop or alter a backup.
+By default nothing reachable over the network can start, stop or alter a backup. The one
+exception is opt-in: with `mqtt.commands.enabled`, **whoever may publish to the command topic
+on your broker can start those operations**. The scheduler cannot tell publishers apart, so
+the broker is the access control. Keep `forget` and `prune` out of
+`mqtt.commands.operations` unless every such publisher is allowed to delete backup data
+within the job's retention rules. See [mqtt.md](mqtt.md#commands).
 
 **TLS.** Rustic talks to S3 over HTTPS by default (your `endpoint`, if set, decides). MQTT
 supports TLS with certificate verification (`mqtt.tls`). The metrics endpoint is plain HTTP;

@@ -38,6 +38,7 @@ class Trigger(StrEnum):
     SCHEDULE = "schedule"
     CATCH_UP = "catch_up"
     MANUAL = "manual"
+    MQTT = "mqtt"
     AFTER_BACKUP = "after_backup"
 
 

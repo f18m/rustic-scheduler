@@ -163,6 +163,9 @@ class Metrics:
 
         self.mqtt_connected = gauge("mqtt_connected", "1 while connected to the MQTT broker")
         self.mqtt_messages = counter("mqtt_messages_total", "MQTT messages by result", ["result"])
+        self.mqtt_commands = counter(
+            "mqtt_commands_total", "MQTT command messages by result", ["result"]
+        )
         self.notifications = counter(
             "notifications_total", "Notification attempts by event and result", ["event", "result"]
         )

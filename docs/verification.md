@@ -31,7 +31,7 @@ What stands in for AWS in the tests is a local S3-compatible server. It proves w
 
 ## Verified against the real Rustic 0.11.4 binary
 
-By the integration tests in `tests/integration/` (39 tests), which CI runs with nothing
+By the integration tests in `tests/integration/` (40 tests), which CI runs with nothing
 skipped.
 
 **Rustic facts the design relies on**
@@ -93,6 +93,26 @@ skipped.
 - Wrong password: no connection, backup unaffected.
 - Reconnection after the broker is stopped and started.
 - TLS: connects with the right CA; refuses the same broker without it.
+- Commands: a `run` message starts a real backup and a real forget (`trigger: mqtt`); a
+  retained command already on the broker starts nothing; an operation not listed is refused
+  with a `rejected` event; the retained `state` topic goes `queued`, `running`, `idle`.
+- A stopped broker is noticed while nothing is being published. After it restarts empty, the
+  discovery messages are back and a command works again.
+- Home Assistant discovery messages are retained on the broker with the expected topics.
+
+**Home Assistant** (one manual run, not part of the test suite)
+
+Home Assistant 2026.11.1 in a container, connected to a Mosquitto broker, with the scheduler
+running a scripted stand-in for Rustic:
+
+- every entity was created without a warning or error in Home Assistant's log;
+- state, outcome with attributes, finish time, duration, progress, data added and snapshot
+  count showed the published values, including a failed check;
+- the `Run check` and `Run forget` buttons started those operations;
+- all entities turned `unavailable` when the scheduler stopped.
+
+Not checked there: removal of entities through an empty payload, other Home Assistant
+versions, and how the entities look in the UI.
 
 **Apprise** (real library, local HTTP receiver)
 
@@ -109,7 +129,7 @@ skipped.
 
 ## Verified with a scripted stand-in for Rustic
 
-The unit tests in `tests/unit/` (188 tests) cover logic that needs precise control over
+The unit tests in `tests/unit/` (209 tests) cover logic that needs precise control over
 timing and failure: configuration validation and error messages; schedule arithmetic across
 time zones and both DST transitions; command construction; profile conflict analysis; the
 process runner (timeouts, SIGKILL escalation, process groups, long lines); every outcome and
@@ -118,7 +138,8 @@ queueing, lock time-outs and the external lock file; shutdown; crash recovery an
 restore; on-time, late, missed and collapsed runs with a controllable clock; catch-up
 evidence rules; metric label bounds and unknown-as-absent; notification selection, retry and
 time-out; Pushgateway verification results; health and readiness following the loop; the
-network port being unable to start jobs; MQTT queueing without a broker; secret masking.
+network port being unable to start jobs; MQTT queueing without a broker; secret masking; MQTT
+command validation and refusals; the content of the Home Assistant discovery messages.
 
 The stand-in's canned `summary` is checked against the real binary's field set by an
 integration test, so the two cannot drift apart unnoticed.

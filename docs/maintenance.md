@@ -100,6 +100,8 @@ Forget is the only operation that removes snapshots, so it is fenced in:
    real command is not executed.
 5. **Not after a bad backup**, and not after a failed post-backup check.
 6. **Not on request unless enabled.** `trigger JOB forget` is refused when forget is disabled.
+   An MQTT command for forget is refused as well, and additionally unless `forget` is listed
+   in `mqtt.commands.operations`.
 7. **Profiles cannot widen it.** `[forget] prune = true` or a foreign `filter-labels` in a
    profile is a start-up error unless the YAML says the same.
 

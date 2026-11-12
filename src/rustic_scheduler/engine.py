@@ -224,6 +224,7 @@ class Engine:
         self._active: dict[tuple[str, Operation], str] = {}
         self._tasks: dict[asyncio.Task[None], tuple[str, Operation]] = {}
         self._progress_sent: dict[tuple[str, Operation], datetime] = {}
+        self._state_sent: dict[tuple[str, Operation], str] = {}
         self._loop_task: asyncio.Task[None] | None = None
         self._pushgateway = (
             PushgatewayClient(
@@ -291,6 +292,8 @@ class Engine:
         for name in self.runtimes:
             for operation in self.enabled_operations(name):
                 self.metrics.declare(name, operation)
+                # Replaces a retained `running` left behind by a crash.
+                self._publish_state((name, operation))
         for result in self.state.load():
             if result.job not in self.runtimes:
                 continue  # a job that was removed from the configuration
@@ -438,6 +441,7 @@ class Engine:
             )
             return False, f"{operation} for job {job} is already {state}"
         self._active[key] = "queued"
+        self._publish_state(key)
         task = asyncio.create_task(
             self._pipeline(self.runtimes[job], operation, trigger), name=f"{job}/{operation}"
         )
@@ -445,8 +449,10 @@ class Engine:
         task.add_done_callback(lambda done: self._tasks.pop(done, None))
         return True, "queued"
 
-    def trigger(self, job: str, operation: Operation) -> tuple[bool, str]:
-        """Manual invocation. Destructive operations must be enabled in the config."""
+    def trigger(
+        self, job: str, operation: Operation, trigger: Trigger = Trigger.MANUAL
+    ) -> tuple[bool, str]:
+        """Invocation on request. Destructive operations must be enabled in the config."""
         if job not in self.runtimes:
             return False, f"unknown job {job!r}"
         cfg = self.runtimes[job].job
@@ -454,7 +460,7 @@ class Engine:
             return False, "forget is not enabled for this job; it will not be run on request"
         if operation == Operation.PRUNE and not cfg.prune.enabled:
             return False, "prune is not enabled for this job; it will not be run on request"
-        return self.submit(job, operation, Trigger.MANUAL)
+        return self.submit(job, operation, trigger)
 
     # --------------------------------------------------------------- pipeline
 
@@ -489,6 +495,7 @@ class Engine:
         finally:
             self.metrics.queued.labels(*key).set(0)
             self._active.pop(key, None)
+            self._publish_state(key)
 
     async def _after_backup(
         self, runtime: JobRuntime, backup: OperationResult, fd: int | None
@@ -529,6 +536,7 @@ class Engine:
                     result = await self._run(runtime, operation, trigger, fd)
                 finally:
                     self._active.pop(key, None)
+                    self._publish_state(key)
                 if operation == Operation.CHECK and result.outcome != Outcome.SUCCEEDED:
                     blocked_by_check = True
 
@@ -549,6 +557,7 @@ class Engine:
             log_file=str(log_file) if log_file else None,
         )
         self._active[key] = "running"
+        self._publish_state(key)
         self.metrics.running.labels(*key).set(1)
         self.metrics.clear_progress(*key)
         self.progress.pop(key, None)
@@ -921,6 +930,24 @@ class Engine:
             }
             | payload,
         )
+
+    def _publish_state(self, key: tuple[str, Operation]) -> None:
+        """Retained `idle`, `queued` or `running` for one operation of a job."""
+        if self.mqtt is None:
+            return
+        state = self._active.get(key, "idle")
+        if self._state_sent.get(key) != state:
+            self._state_sent[key] = state
+            self.mqtt.publish(self.mqtt.topic("jobs", *key, "state"), state, retain=True)
+
+    def is_active(self, job: str, operation: Operation) -> str | None:
+        """`queued` or `running`, or None when the operation is idle."""
+        return self._active.get((job, operation))
+
+    def reject(self, job: str, operation: Operation, trigger: Trigger, detail: str) -> None:
+        """Report a request that was refused, without recording a run."""
+        log.warning("job %s: %s request refused (%s): %s", job, operation, trigger, detail)
+        self._event(job, operation, "rejected", {"trigger": str(trigger), "detail": detail})
 
     # --------------------------------------------------------------- shutdown
 

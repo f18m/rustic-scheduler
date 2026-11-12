@@ -67,6 +67,12 @@ Rustic's own options do not belong here. They stay in your Rustic TOML profiles;
 | `tls.enabled` | `false` | |
 | `tls.ca_file`, `tls.cert_file`, `tls.key_file` | none | CA bundle; client certificate and key. |
 | `tls.insecure` | `false` | Skip certificate verification. Test brokers only. |
+| `commands.enabled` | `false` | Start operations by MQTT message. See [mqtt.md](mqtt.md#commands). |
+| `commands.operations` | `[backup, check]` | Operations a message may start: `backup`, `snapshots`, `check`, `forget`, `prune`. `forget` and `prune` delete data and must be listed explicitly; they must also be enabled on the job. |
+| `homeassistant.enabled` | `false` | Publish Home Assistant MQTT discovery messages. See [mqtt.md](mqtt.md#home-assistant). |
+| `homeassistant.discovery_prefix` | `homeassistant` | Home Assistant's discovery topic prefix. |
+| `homeassistant.node_id` | `rustic_scheduler` | Namespace of the entities; letters, digits, `_`, `-`. Use a different one per scheduler. |
+| `homeassistant.device_name` | `Rustic Scheduler` | Devices are named `<device_name> <job>`. |
 
 ## `notifications`
 
@@ -143,7 +149,7 @@ Label and host together must be unique among jobs.
 | Setting | Default | Meaning |
 |---|---|---|
 | `enabled` | `false` | Run `rustic prune` on a schedule. Acts on the whole repository. |
-| `schedule` | required when enabled | |
+| `schedule` | required when enabled | Not required if `prune` is listed in `mqtt.commands.operations`: it then runs on request only. |
 | `dry_run` | `false` | |
 | `timeout`, `retries`, `retry_delay`, `extra_args` | `12h`, `0`, `5m`, `[]` | |
 

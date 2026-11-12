@@ -39,6 +39,15 @@ mqtt:
   tls:
     enabled: false
     # ca_file: /etc/rustic-scheduler/mqtt-ca.pem
+  # Start operations by publishing `run` to <topic_prefix>/jobs/<job>/<operation>/run.
+  # Anyone who may publish to the broker can then start them: see docs/mqtt.md.
+  commands:
+    enabled: false
+    operations: [backup, check]    # add `forget` only if that is acceptable
+  # Sensors and "run" buttons in Home Assistant, through MQTT discovery.
+  homeassistant:
+    enabled: false
+    discovery_prefix: homeassistant
 
 notifications:
   enabled: false

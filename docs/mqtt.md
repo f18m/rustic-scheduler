@@ -3,6 +3,12 @@
 Off by default. When `mqtt.enabled` is false the scheduler opens no connection and nothing
 depends on a broker.
 
+Two further features are off unless enabled separately:
+
+- [Commands](#commands): start a backup, check, forget (or snapshots, prune) by MQTT message.
+- [Home Assistant discovery](#home-assistant): sensors and buttons appear in Home Assistant
+  without any YAML there.
+
 ```yaml
 mqtt:
   enabled: true
@@ -23,6 +29,8 @@ mqtt:
 | Topic | Retained | QoS | Payload |
 |---|---|---|---|
 | `<prefix>/status` | yes | 1 | `online` or `offline` (plain text) |
+| `<prefix>/jobs/<job>/<operation>/state` | yes | `mqtt.qos` | `idle`, `queued` or `running` (plain text) |
+| `<prefix>/jobs/<job>/<operation>/run` | – | – | **Subscribed to**, not published: see [Commands](#commands) |
 | `<prefix>/jobs/<job>/<operation>/event` | no | `mqtt.qos` | Lifecycle event (JSON) |
 | `<prefix>/jobs/<job>/<operation>/progress` | no | 0 | Live progress (JSON) |
 | `<prefix>/jobs/<job>/<operation>/result` | yes | `mqtt.qos` | Last result (JSON) |
@@ -30,14 +38,22 @@ mqtt:
 `offline` is published on a clean stop and, as the connection's last will, when the
 scheduler disappears.
 
+### State
+
+`idle`, `queued` (waiting for the repository) or `running`, published when it changes. At
+start-up every enabled operation is set to `idle`, which replaces a `running` left behind by
+a crash. While `<prefix>/status` is `offline` the retained state is not being maintained.
+
 ### Events
 
 ```json
 {"event": "started", "job": "documents", "operation": "backup", "at": "2026-11-10T01:30:00.012+00:00", "trigger": "schedule"}
 ```
 
-`event` is `queued`, `started`, `finished` or `skipped`. `finished` and `skipped` carry the
-full result (below). `trigger` is `schedule`, `catch_up`, `manual` or `after_backup`.
+`event` is `queued`, `started`, `finished`, `skipped` or `rejected`. `finished` and `skipped`
+carry the full result (below). `rejected` answers a [command](#commands) that was refused and
+carries the reason in `detail`. `trigger` is `schedule`, `catch_up`, `manual`, `mqtt` or
+`after_backup`.
 
 ### Progress
 
@@ -70,6 +86,102 @@ Skips are published as events only, so the retained result is always a run that 
 
 Payloads pass through the same secret masking as the logs.
 
+## Commands
+
+```yaml
+mqtt:
+  enabled: true
+  commands:
+    enabled: true
+    operations: [backup, check, forget]   # default: [backup, check]
+```
+
+Publish the payload `run` to `<prefix>/jobs/<job>/<operation>/run`:
+
+```sh
+mosquitto_pub -h mosquitto -u someone -P ... -q 1 \
+  -t rustic-scheduler/jobs/documents/backup/run -m run
+```
+
+The run is queued exactly like `rustic-scheduler trigger`: it waits for the repository, a
+backup is followed by its after-backup sequence, and the result has `"trigger": "mqtt"`.
+There is no reply topic. Watch `.../event` (`queued`, then `started`, `finished`; or
+`rejected` with the reason), `.../state` and `.../result`.
+
+| Message | What happens |
+|---|---|
+| Payload `run` (any case, surrounding whitespace ignored), not retained | The operation is queued. |
+| Operation not in `mqtt.commands.operations` | `rejected` event. Nothing runs. |
+| `forget` or `prune` not enabled on the job | `rejected` event. Listing it under `commands` does not enable it. |
+| Same job and operation already queued or running | `rejected` event. Not recorded as a skipped run, so a button pressed twice does not look like a missed backup. |
+| **Retained** message | Ignored, with a warning. Otherwise a message left on the broker would start a run at every reconnect. |
+| Any other payload, unknown job, unknown operation | Ignored, with a warning. |
+
+Counted in `rustic_scheduler_mqtt_commands_total{result="accepted"|"rejected"|"invalid"}`.
+
+Things to know before enabling it:
+
+- **Anyone who may publish to that topic can start these operations.** MQTT has no notion of
+  who sent a message. Use broker authentication, an ACL that limits who may write to
+  `<prefix>/jobs/+/+/run`, and TLS. Without TLS the broker password crosses the network in
+  clear text.
+- **`forget` and `prune` delete data, so they are not in the default list.** A forget started
+  this way goes through the same preview and safeguards as any other
+  ([maintenance.md](maintenance.md#safeguards)), and `dry_run: true` still applies.
+- **An operation can be on-request only.** `forget`, `check` or `prune` enabled with neither
+  `after_backup` nor a `schedule` is normally a configuration error; it is accepted when the
+  operation is listed in `mqtt.commands.operations`.
+- Commands sent while the scheduler is disconnected or stopped are lost: the session is not
+  persistent, so the broker does not keep them. This is deliberate; a backlog of old commands
+  should not run after an outage.
+- QoS 1 can deliver a message twice. The second copy is refused as "already queued or
+  running" or, if the first run already finished, starts another run.
+
+## Home Assistant
+
+```yaml
+mqtt:
+  enabled: true
+  homeassistant:
+    enabled: true
+    discovery_prefix: homeassistant   # Home Assistant's default
+    node_id: rustic_scheduler         # change it when running several schedulers
+    device_name: Rustic Scheduler
+```
+
+Uses Home Assistant's [MQTT discovery](https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery).
+One device per job, named `<device_name> <job>`, with these entities for each **enabled**
+operation (`backup` always; `snapshots`, `check`, `forget`, `prune` when enabled on the job):
+
+| Entity | Source topic | Notes |
+|---|---|---|
+| `<Operation> state` (sensor) | `.../state` | `idle`, `queued`, `running` |
+| `<Operation> last outcome` (sensor) | `.../result` | `succeeded`, `failed`, `interrupted`, `unknown`; attributes `reason`, `detail`, `trigger`, `exit_code`, `attempts`, `dry_run`, `started_at` |
+| `<Operation> last finished` (timestamp sensor) | `.../result` | |
+| `<Operation> last duration` (sensor, seconds) | `.../result` | |
+| `Run <operation>` (button) | publishes `run` to `.../run` | Only with `mqtt.commands.enabled` and the operation listed there |
+| `Backup progress` (sensor, %) | `.../backup/progress` | Unknown when Rustic reports no ratio; unavailable when no progress arrived for a while |
+| `Backup data added` (sensor, bytes) | `.../backup/result` | |
+| `Snapshot count` (sensor) | `.../snapshots/result` | |
+
+All entities become unavailable when `<prefix>/status` is `offline`.
+
+Checked once by hand against Home Assistant 2026.11.1; see
+[verification.md](verification.md). It is not part of the automated tests.
+
+- Discovery messages are retained and published again at every connection, so they survive a
+  broker restart and Home Assistant finds them whenever it starts.
+- The outcome sensors need `mqtt.retain_results: true` (the default) to show a value after
+  Home Assistant restarts.
+- A skipped run is an event, not a result, so it does not change `last outcome`. Use the
+  Prometheus alerts for missed backups.
+- Entity identity is `<node_id>_<job>_<operation>_<entity>`, with `.` in a job name replaced
+  by `_`. Two jobs that would collide are a configuration error.
+- **Removal.** Entities of an operation you disable are removed at the next start. Entities
+  of a job you delete, and all of them if you turn discovery off, stay in Home Assistant:
+  delete the device there, and clear the retained messages, for example
+  `mosquitto_sub -t 'homeassistant/+/rustic_scheduler/#' --remove-retained -W 2`.
+
 ## Delivery
 
 - Messages are queued in memory (`mqtt.queue_size`, default 1000) and sent by a background
@@ -91,7 +203,9 @@ Payloads pass through the same secret masking as the logs.
   `tls.insecure: true` disables verification and is meant for test brokers only. Without TLS,
   credentials and payloads cross the network in clear text.
 - **Reconnection**: after a failure the scheduler retries after 1s, doubling up to
-  `mqtt.max_reconnect_delay` (default 60s), forever.
+  `mqtt.max_reconnect_delay` (default 60s), forever. A lost connection is noticed within
+  about one and a half `mqtt.keepalive` periods, also while nothing is being published. After
+  reconnecting, the command subscription and the discovery messages are restored.
 
 ## Failures
 
@@ -99,4 +213,5 @@ MQTT problems never change a Rustic outcome and never delay a backup. They are v
 
 - `rustic_scheduler_mqtt_connected` (0 or 1)
 - `rustic_scheduler_mqtt_messages_total{result="published"|"dropped"|"connection_error"}`
+- `rustic_scheduler_mqtt_commands_total{result="accepted"|"rejected"|"invalid"}`
 - warnings in the log

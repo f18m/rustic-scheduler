@@ -207,8 +207,6 @@ class ForgetConfig(_OperationConfig):
                 "forget is enabled without retention rules: add `keep` (for example "
                 "`keep-daily: 7`) or set `rules_from_profile: true`"
             )
-        if not self.after_backup and self.schedule is None:
-            raise ValueError("forget is enabled but has neither `after_backup` nor a `schedule`")
         return self
 
 
@@ -224,12 +222,6 @@ class PruneConfig(_OperationConfig):
     @classmethod
     def _args(cls, value: list[str]) -> list[str]:
         return _check_extra_args("prune", value)
-
-    @model_validator(mode="after")
-    def _validate(self) -> PruneConfig:
-        if self.enabled and self.schedule is None:
-            raise ValueError("prune is enabled but has no `schedule`")
-        return self
 
 
 class CheckConfig(_OperationConfig):
@@ -249,8 +241,6 @@ class CheckConfig(_OperationConfig):
 
     @model_validator(mode="after")
     def _validate(self) -> CheckConfig:
-        if self.enabled and not self.after_backup and self.schedule is None:
-            raise ValueError("check is enabled but has neither `after_backup` nor a `schedule`")
         if self.read_data_subset and not self.read_data:
             raise ValueError("check.read_data_subset needs `read_data: true`")
         return self
@@ -355,6 +345,37 @@ class MqttTlsConfig(_Model):
     insecure: bool = False
 
 
+CommandOperation = Literal["backup", "snapshots", "check", "forget", "prune"]
+
+
+class MqttCommandsConfig(_Model):
+    """Starting operations by MQTT message. Off unless enabled."""
+
+    enabled: bool = False
+    #: Operations a message may start. `forget` and `prune` delete data, so
+    #: they have to be listed explicitly.
+    operations: list[CommandOperation] = ["backup", "check"]
+
+
+class HomeAssistantConfig(_Model):
+    """Home Assistant MQTT discovery. Off unless enabled."""
+
+    enabled: bool = False
+    discovery_prefix: str = "homeassistant"
+    #: Groups this scheduler's entities; change it when running several schedulers.
+    node_id: str = "rustic_scheduler"
+    device_name: str = "Rustic Scheduler"
+
+    @model_validator(mode="after")
+    def _validate(self) -> HomeAssistantConfig:
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", self.node_id):
+            raise ValueError("node_id may only contain letters, digits, '_' and '-'")
+        prefix = self.discovery_prefix
+        if not prefix.strip("/") or "#" in prefix or "+" in prefix:
+            raise ValueError("discovery_prefix must be a topic without wildcards")
+        return self
+
+
 class MqttConfig(_Model):
     enabled: bool = False
     host: str = "localhost"
@@ -371,6 +392,8 @@ class MqttConfig(_Model):
     max_reconnect_delay: Duration = timedelta(seconds=60)
     queue_size: int = Field(default=1000, ge=1)
     tls: MqttTlsConfig = MqttTlsConfig()
+    commands: MqttCommandsConfig = MqttCommandsConfig()
+    homeassistant: HomeAssistantConfig = HomeAssistantConfig()
 
     @model_validator(mode="after")
     def _validate(self) -> MqttConfig:
@@ -432,6 +455,11 @@ class Config(_Model):
         return self.jobs[job].label or job
 
 
+def entity_slug(job: str) -> str:
+    """A job name as a Home Assistant identifier."""
+    return job.replace(".", "_")
+
+
 def _format_validation_error(error: ValidationError) -> list[str]:
     problems = []
     for item in error.errors():
@@ -471,6 +499,26 @@ def _semantic_problems(config: Config) -> list[str]:
                 schedule.build(config.scheduler.timezone)
             except ValueError as exc:
                 problems.append(f"{where}.{key}: {exc}")
+        # An enabled operation that nothing would ever start is a mistake, unless
+        # it is meant to be started by MQTT message.
+        on_demand = set(config.mqtt.commands.operations) if config.mqtt.commands.enabled else set()
+        unstartable = [
+            ("forget", job.forget.enabled, job.forget.after_backup, job.forget.schedule),
+            ("prune", job.prune.enabled, False, job.prune.schedule),
+            ("check", job.check.enabled, job.check.after_backup, job.check.schedule),
+        ]
+        for operation, enabled, after_backup, schedule in unstartable:
+            if not enabled or after_backup or schedule is not None or operation in on_demand:
+                continue
+            needs = (
+                "no `schedule`"
+                if operation == "prune"
+                else "neither `after_backup` nor a `schedule`"
+            )
+            problems.append(
+                f"{where}.{operation}: {operation} is enabled but has {needs}; add one, or "
+                f"list {operation} in mqtt.commands.operations to run it on request only"
+            )
         # Two jobs with the same label and host could not be told apart, so
         # one job's retention would act on the other's snapshots.
         identity = (config.label_of(name), job.host)
@@ -480,6 +528,24 @@ def _semantic_problems(config: Config) -> list[str]:
                 "each job needs its own label so that telemetry and forget stay separate"
             )
         labels[identity] = name
+    if not config.mqtt.enabled:
+        for feature, on in (
+            ("commands", config.mqtt.commands.enabled),
+            ("homeassistant", config.mqtt.homeassistant.enabled),
+        ):
+            if on:
+                problems.append(f"mqtt.{feature}.enabled needs mqtt.enabled: true")
+    if config.mqtt.homeassistant.enabled:
+        # Home Assistant identifiers cannot contain '.', so it is replaced.
+        slugs: dict[str, str] = {}
+        for name in config.jobs:
+            slug = entity_slug(name)
+            if slug in slugs:
+                problems.append(
+                    f"jobs.{name}: Home Assistant discovery cannot tell this job from "
+                    f"{slugs[slug]!r} (both become {slug!r}); rename one of them"
+                )
+            slugs[slug] = name
     if config.mqtt.enabled:
         for secret, what in (
             (config.mqtt.password_file, "mqtt.password_file"),
