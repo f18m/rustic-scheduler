@@ -335,7 +335,8 @@ class WebConfig(_Model):
     enabled: bool = False
     host: str = "0.0.0.0"  # noqa: S104 - published or not by the container's port mapping
     port: int = Field(default=9301, ge=1, le=65535)
-    #: Externally reachable URL, published in Home Assistant discovery.
+    #: Externally reachable URL, published in Home Assistant discovery. Always
+    #: ends with `/`: it is the directory the page's relative paths resolve against.
     public_url: AnyHttpUrl | None = None
     #: Operations the page may start. `forget` and `prune` delete data, so
     #: they have to be listed explicitly. Empty: the page is read-only.
@@ -356,6 +357,10 @@ class WebConfig(_Model):
             or value.fragment is not None
         ):
             raise ValueError("must not contain credentials, a query, or a fragment")
+        # The page loads its stylesheet, script and API by relative paths, which a
+        # browser resolves against the directory: `/backup` would lose its last segment.
+        if value is not None and not (value.path or "/").endswith("/"):
+            return AnyHttpUrl(f"{value}/")
         return value
 
     @model_validator(mode="after")

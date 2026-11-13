@@ -348,6 +348,13 @@ def test_web_configuration(sandbox):
     assert str(sandbox.config(web={"public_url": "https://example.com:8443/"}).web.public_url) == (
         "https://example.com:8443/"
     )
+    # The page's relative paths resolve against a directory, so the slash is added.
+    for written, published in (
+        ("https://example.com", "https://example.com/"),
+        ("https://example.com/backup", "https://example.com/backup/"),
+        ("https://example.com/a/b/", "https://example.com/a/b/"),
+    ):
+        assert str(sandbox.config(web={"public_url": written}).web.public_url) == published
 
     # check with nothing to start it is fine once the page may start it ...
     sandbox.config({"docs": JOB | {"check": {"enabled": True}}}, web={"enabled": True})

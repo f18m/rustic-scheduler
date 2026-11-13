@@ -16,8 +16,19 @@ commented out in `compose.yaml`).
 
 Set `web.public_url` to the externally reachable HTTP(S) URL to include a link in Home
 Assistant MQTT discovery when both features are enabled. This can differ from the listen
-address and port when using Docker or a reverse proxy. The URL is published to the broker
-and must not contain credentials, a query or a fragment.
+address and port when using Docker or a reverse proxy. The URL must not contain credentials,
+a query or a fragment.
+
+The URL is the directory the page is served from, so it ends with `/`; the scheduler adds
+the slash when it is missing (`https://example.com/backup` becomes
+`https://example.com/backup/`). The page loads its stylesheet, script and API by relative
+paths, so a reverse proxy serving it under a sub-path must forward everything below that
+path.
+
+The scheduler publishes the URL as written, in retained messages that every client of the
+broker can read. It cannot tell a secret path segment from an ordinary one: do not use a
+URL whose path carries an access token (as some tunnel and share-link services issue), and
+put authentication in `web.password_file` or the reverse proxy instead.
 
 The page has three parts.
 

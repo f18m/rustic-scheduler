@@ -283,6 +283,54 @@ async def test_discovery_is_published_on_every_connection(sandbox):
     assert parse_config(sandbox.last_raw).mqtt.homeassistant.enabled
 
 
+async def test_birth_messages_are_redacted_like_queued_ones(monkeypatch):
+    from rustic_scheduler import mqtt as module
+    from rustic_scheduler.redact import MASK, REDACTOR
+
+    sent: list[tuple[str, str]] = []
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def publish(self, topic, payload, **kwargs):
+            sent.append((topic, payload))
+
+        async def subscribe(self, *args, **kwargs):
+            pass
+
+        @property
+        def messages(self):
+            async def forever():
+                await asyncio.Event().wait()
+                yield
+
+            return forever()
+
+    monkeypatch.setattr(module.aiomqtt, "Client", Client)
+    monkeypatch.setattr(REDACTOR, "_literals", {"registered-secret-value"})
+    publisher = MqttPublisher(MqttConfig(enabled=True), Metrics())
+    link = {"device": {"configuration_url": "https://proxy.example/s/registered-secret-value/"}}
+    publisher.birth = [("homeassistant/sensor/x/config", json.dumps(link)), ("removed", "")]
+    task = asyncio.create_task(publisher.run())
+    for _ in range(100):
+        if publisher.connected:
+            break
+        await asyncio.sleep(0.01)
+    await publisher.stop(task)
+    payloads = dict(sent)
+    published = json.loads(payloads["homeassistant/sensor/x/config"])
+    assert published["device"]["configuration_url"] == f"https://proxy.example/s/{MASK}/"
+    assert payloads["removed"] == ""
+    assert payloads["rustic-scheduler/status"] == "offline"
+
+
 async def test_discovery_uses_web_configuration_from_application(sandbox):
     config = sandbox.config(
         mqtt={"enabled": True, "homeassistant": {"enabled": True}},
