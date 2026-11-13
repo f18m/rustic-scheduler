@@ -127,7 +127,8 @@ only been checked as discovery payloads in unit tests, not in a running Home Ass
   Not exercised yet: a real GitHub release run of the CI workflow with this mechanism.
 
 Not checked there: removal of entities through an empty payload, other Home Assistant
-versions, and how the entities look in the UI.
+versions, how the entities look in the UI, and the web interface link. Unit tests check
+the discovery payload's link with the web interface enabled and disabled.
 
 **Web interface**
 
