@@ -157,7 +157,7 @@ def connect_mqtt_features(
         )
     if config.mqtt.homeassistant.enabled:
         operations = {name: engine.enabled_operations(name) for name in engine.runtimes}
-        mqtt.birth = discovery_messages(config.mqtt, operations)
+        mqtt.birth = discovery_messages(config.mqtt, operations, config.web)
 
 
 async def serve(config_path: Path) -> int:

@@ -112,7 +112,11 @@ running a scripted stand-in for Rustic:
 - all entities turned `unavailable` when the scheduler stopped.
 
 Not checked there: removal of entities through an empty payload, other Home Assistant
-versions, and how the entities look in the UI.
+versions, how the entities look in the UI, and the web interface link. Unit tests check
+the discovery payload's link with the web interface enabled and disabled, the trailing
+slash added to `web.public_url`, and that discovery messages pass through secret masking
+(against a stand-in MQTT client, not a broker). A URL whose path is itself a secret is not
+detected.
 
 **Web interface**
 

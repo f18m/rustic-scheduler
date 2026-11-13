@@ -166,6 +166,14 @@ operation (`backup` always; `snapshots`, `check`, `forget`, `prune` when enabled
 
 All entities become unavailable when `<prefix>/status` is `offline`.
 
+To add a web interface link to each device, enable the web interface and set
+`web.public_url` to the URL reachable from the browser, for example
+`https://backup.example.com/`. The scheduler publishes this URL in discovery; it does not
+infer it from the listen address, Docker port mappings or a reverse proxy. Without a
+configured URL, no link is included in discovery messages. The URL is retained on the broker
+and readable by all of its clients, so it must not contain credentials or a secret path
+segment; see [web.md](web.md).
+
 Checked once by hand against Home Assistant 2026.11.1; see
 [verification.md](verification.md). It is not part of the automated tests.
 
