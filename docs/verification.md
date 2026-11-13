@@ -121,19 +121,37 @@ versions, and how the entities look in the UI.
   of the manual panel, run as printed against the real binary, list only that job's
   snapshot, list its files, pass `check`, and restore a file. `restore --dry-run` restores no
   file, but Rustic 0.11.4 does create the empty target directory.
+- With the real binary (integration test): the Snapshots tab's routes list a job's snapshots
+  newest first, without those of another job in the same repository; the root, the source
+  directory and a subdirectory of a snapshot with each entry's type, size, modification
+  time, permissions, owner and link target as backed up; a missing path, a file given as a
+  directory and another job's snapshot are answered with 404; nothing is recorded as a run
+  and the repository still passes `check`.
+- With the scripted stand-in (unit tests), for the Snapshots tab: off by default; lists kept
+  in memory until an operation finishes or a refresh; a busy repository refused rather than
+  queued behind, with earlier lists still served; truncation at `max_entries`; short ids,
+  `latest`, `..` and requests without the page's header refused before Rustic is started.
 - With the scripted stand-in (unit tests): progress of a running backup in the overview;
   bounded, newest-first history including skipped runs, and what it holds after a restart;
   `forget` refused unless listed and enabled, and still previewed first; refusal of a second
   request without a recorded skip; requests without the page's header or with a foreign
   `Origin` refused; Basic authentication on every route, password rotation, and an
   unreadable password file failing closed; no secret value in the manual commands.
-- One manual run, not part of the test suite: the scheduler process serving the page to
+- One manual run of the tabbed page, not part of the test suite, in headless Chrome against
+  a local repository made by the real binary: switching tabs, listing two jobs' snapshots,
+  opening a snapshot, entering a directory and going back up by the path, a file name
+  containing `<i>` shown as text, "Run now", light and dark, a narrow window; no error in
+  the browser console.
+- One earlier manual run, not part of the test suite: the scheduler process serving the page to
   headless Chrome (light and dark), showing a running backup's progress, a failed check, the
   history and the manual panel; the metrics port still refused a run request.
 
-Not checked: clicking the buttons in a browser (the request they send was tested, the click
-and the confirmation dialog were not); the copy buttons; browsers other than Chrome; the
-page behind a reverse proxy; progress display for operations other than backup.
+Not checked: a person clicking in a browser window (in the manual run the clicks were sent
+by script, and only for "Run now" on a backup, the tabs and the snapshot browser); the
+confirmation dialog of `forget` and `prune`; the copy buttons; keyboard navigation of the
+tabs; how browsers show the icon; browsers other than Chrome; the page behind a reverse
+proxy; progress display for operations other than backup; snapshots with very many files in
+one directory, on a slow or remote repository, or in a repository with cold storage.
 
 **Apprise** (real library, local HTTP receiver)
 

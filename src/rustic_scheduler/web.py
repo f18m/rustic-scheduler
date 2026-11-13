@@ -1,8 +1,10 @@
 """Optional browser interface, on its own port.
 
-  GET  /                                    the page (plus /app.js, /app.css)
-  GET  /api/v1/overview                     everything the page shows, as JSON
+  GET  /                                    the page (plus /app.js, /app.css, /favicon.svg)
+  GET  /api/v1/overview                     jobs, progress, history, manual commands
   POST /api/v1/jobs/{job}/{operation}/run   start an operation
+  GET  /api/v1/jobs/{job}/snapshots         the job's snapshots     (with web.browse)
+  GET  /api/v1/jobs/{job}/snapshots/{id}/files?path=/dir            (with web.browse)
 
 The metrics port stays read-only; this listener is the one that can start
 work, so it is separate, off by default and limited to ``web.operations``.
@@ -16,6 +18,7 @@ Protection (see docs/web.md):
 * a strict Content-Security-Policy, and a page that never builds HTML from data.
 
 History is the engine's in-memory list: nothing is stored for this interface.
+The snapshot and file listings (browse.py) are read-only and off by default.
 """
 
 from __future__ import annotations
@@ -34,6 +37,7 @@ from urllib.parse import urlsplit
 from aiohttp import web
 
 from . import __version__
+from .browse import BrowseError, Browser
 from .config import WebConfig
 from .engine import Engine
 from .model import Operation, Trigger
@@ -41,14 +45,16 @@ from .redact import REDACTOR
 
 log = logging.getLogger(__name__)
 
-#: Header the page sends with every POST. A cross-site form cannot set it, and
-#: a cross-site script would need a CORS preflight that is never granted.
+#: Header the page sends with every request that starts a Rustic process. A cross-site
+#: form or image cannot set it, and a cross-site script would need a CORS preflight
+#: that is never granted.
 CSRF_HEADER = "X-Requested-With"
 CSRF_VALUE = "rustic-scheduler"
 _ASSETS = {
     "/": ("index.html", "text/html"),
     "/app.js": ("app.js", "text/javascript"),
     "/app.css": ("app.css", "text/css"),
+    "/favicon.svg": ("favicon.svg", "image/svg+xml"),
 }
 _HEADERS = {
     "Content-Security-Policy": (
@@ -130,6 +136,7 @@ def overview(engine: Engine, config: WebConfig, rustic_version: str) -> dict[str
         "shutting_down": status["shutting_down"],
         "started_at": status["started_at"],
         "history_size": config.history_size,
+        "browse": config.browse.enabled,
         "jobs": jobs,
         "history": [result.to_dict() for result in reversed(engine.history)],
     }
@@ -199,9 +206,30 @@ def create_app(engine: Engine, config: WebConfig, rustic_version: str) -> web.Ap
         response.headers.update(_HEADERS)
         return response
 
+    browser = Browser(engine, config.browse)
+
     async def asset(request: web.Request) -> web.Response:
         body, content_type = assets[request.path]
         return web.Response(body=body, content_type=content_type, charset="utf-8")
+
+    async def browse(request: web.Request) -> web.Response:
+        """Snapshots of a job, or one directory of a snapshot. Read-only."""
+        job = request.match_info["job"]
+        snapshot = request.match_info.get("snapshot")
+        try:
+            if not config.browse.enabled:
+                raise BrowseError(404, "browsing snapshots is off (web.browse.enabled)")
+            if request.headers.get(CSRF_HEADER) != CSRF_VALUE or not _same_origin(request):
+                raise BrowseError(403, "this request did not come from the scheduler's own page")
+            if job not in engine.runtimes:
+                raise BrowseError(404, "unknown job")
+            if snapshot is None:
+                data = await browser.snapshots(job, refresh="refresh" in request.query)
+            else:
+                data = await browser.files(job, snapshot, request.query.get("path", "/"))
+        except BrowseError as exc:
+            return web.json_response({"message": exc.message}, status=exc.status)
+        return web.json_response(data)
 
     async def get_overview(_: web.Request) -> web.Response:
         return web.json_response(overview(engine, config, rustic_version))
@@ -243,6 +271,8 @@ def create_app(engine: Engine, config: WebConfig, rustic_version: str) -> web.Ap
         app.router.add_get(path, asset)
     app.router.add_get("/api/v1/overview", get_overview)
     app.router.add_post("/api/v1/jobs/{job}/{operation}/run", run)
+    app.router.add_get("/api/v1/jobs/{job}/snapshots", browse)
+    app.router.add_get("/api/v1/jobs/{job}/snapshots/{snapshot}/files", browse)
     return app
 
 
@@ -267,17 +297,20 @@ class WebServer:
             raise
         self._runner = runner
         log.info(
-            "web interface on http://%s:%s/ (may start: %s; authentication: %s)",
+            "web interface on http://%s:%s/ (may start: %s; snapshot browsing: %s; "
+            "authentication: %s)",
             config.host,
             config.port,
             ", ".join(config.operations) or "nothing",
+            "on" if config.browse.enabled else "off",
             "password" if config.password_file else "none",
         )
         if config.password_file is None:
             log.warning(
                 "web interface: no web.password_file, so anyone who can reach port %s can "
-                "start the operations above",
+                "start the operations above%s",
                 config.port,
+                " and list the files in every job's snapshots" if config.browse.enabled else "",
             )
         elif not os.access(config.password_file, os.R_OK):
             log.error("web interface: web.password_file is not readable; every request will fail")

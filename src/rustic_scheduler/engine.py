@@ -645,6 +645,19 @@ class Engine:
             name=f"rustic[{runtime.name}]",
         )
 
+    async def query(
+        self, job: str, argv: list[str], timeout: timedelta, wait: float
+    ) -> ProcessResult:
+        """Run a read-only Rustic command for the web interface and return its raw output.
+
+        Not an operation: no result, no metrics, no state, no run log. It still takes
+        the repository lock (one Rustic process per repository), but waits only ``wait``
+        seconds for it and raises ``LockTimeout`` instead of queueing behind a run.
+        """
+        runtime = self.runtimes[job]
+        async with self.locks.hold(runtime.lock_key, wait) as fd:
+            return await self._process(runtime, argv, timeout, fd, None, mode="capture")
+
     async def _execute(
         self, runtime: JobRuntime, operation: Operation, fd: int | None, log_file: Any
     ) -> Attempt:

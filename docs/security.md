@@ -116,7 +116,7 @@ only what should be backed up.
 | Pushgateway 9091 | read **and write** of pushed metrics | not publishing it; see [metrics.md](metrics.md#securing-it) |
 | Control socket | manual triggers | file mode 0600 in the state volume; not reachable over the network |
 | MQTT command topic (only with `mqtt.commands.enabled`) | starting the operations listed in `mqtt.commands.operations` | broker authentication, a broker ACL on `<prefix>/jobs/+/+/run`, TLS |
-| 9301, web interface (only with `web.enabled`) | status, history, the manual commands, and starting the operations listed in `web.operations` | `web.password_file`, binding to loopback or a private network, a reverse proxy with HTTPS. Plain HTTP; no authentication unless a password file is set. |
+| 9301, web interface (only with `web.enabled`) | status, history, the manual commands, starting the operations listed in `web.operations`, and with `web.browse.enabled` the names, sizes, times and owners of the files in each job's snapshots (not their contents) | `web.password_file`, binding to loopback or a private network, a reverse proxy with HTTPS. Plain HTTP; no authentication unless a password file is set. |
 
 By default nothing reachable over the network can start, stop or alter a backup. There are
 two opt-in exceptions. With `web.enabled`, whoever can reach the web port (and knows the

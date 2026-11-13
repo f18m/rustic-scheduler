@@ -75,6 +75,16 @@ def snapshots_command(runtime: JobRuntime) -> list[str]:
     return [runtime.binary, *runtime.base_args, "snapshots", "--json", *_scope(runtime)]
 
 
+def tree_command(runtime: JobRuntime, snapshot: str, path: str) -> list[str]:
+    """`rustic cat tree`: one directory of a snapshot, with each entry's metadata.
+
+    Read-only. Used by the web interface's file browser, because `rustic ls --json`
+    prints names only (Rustic 0.11.4). The caller checks that ``snapshot`` is one of
+    the job's own snapshots; it is passed as a single argument, never through a shell.
+    """
+    return [runtime.binary, *runtime.base_args, "cat", "tree", f"{snapshot}:{path}"]
+
+
 def forget_command(runtime: JobRuntime, *, dry_run: bool) -> list[str]:
     """`rustic forget`, always limited to the job's own snapshots.
 

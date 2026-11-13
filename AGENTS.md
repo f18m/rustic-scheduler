@@ -39,7 +39,8 @@ with `uv`; do not add dependencies without a reason and update `uv.lock` when yo
 | `mqtt.py` | MQTT connection: queued publishing, receiving, reconnect |
 | `mqtt_commands.py` | Starting operations by MQTT message |
 | `homeassistant.py` | Home Assistant MQTT discovery payloads |
-| `web.py`, `webui/` | Optional web interface on its own port: overview JSON, run requests, static page |
+| `web.py`, `webui/` | Optional web interface on its own port: overview JSON, run requests, static tabbed page and favicon |
+| `browse.py` | Read-only snapshot and file listings for the web interface (`web.browse`), via `Engine.query` |
 | `notify.py`, `pushgateway.py` | Apprise notifications; Pushgateway delivery verification |
 | `app.py`, `cli.py` | Start-up wiring; the `rustic-scheduler` command |
 | `tests/unit/` | Uses `tests/fake_rustic.py`, a scripted stand-in driven by a JSON plan |
@@ -80,7 +81,10 @@ with `uv`; do not add dependencies without a reason and update `uv.lock` when yo
     command topic (ignores retained messages, allows only `mqtt.commands.operations`) and
     the web interface on its own port (allows only `web.operations`, requires the
     `X-Requested-With` header and a same-origin `Origin`, optional Basic authentication
-    that fails closed). Both default to `backup`, `check` and still apply rule 3. Do not
+    that fails closed). Both default to `backup`, `check` and still apply rule 3. The web
+    interface's snapshot browser (`web.browse`, off by default) is read-only: it runs only
+    `snapshots` and `cat tree` on the job's own snapshots, under the repository lock without
+    queueing, and must stay unable to read file contents or change anything. Do not
     widen either, and do not add mutating routes to the metrics port, without the user
     asking.
 13. **The web page never builds HTML from data** and loads nothing inline or from other
