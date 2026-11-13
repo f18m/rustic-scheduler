@@ -39,6 +39,7 @@ with `uv`; do not add dependencies without a reason and update `uv.lock` when yo
 | `mqtt.py` | MQTT connection: queued publishing, receiving, reconnect |
 | `mqtt_commands.py` | Starting operations by MQTT message |
 | `homeassistant.py` | Home Assistant MQTT discovery payloads |
+| `web.py`, `webui/` | Optional web interface on its own port: overview JSON, run requests, static page |
 | `notify.py`, `pushgateway.py` | Apprise notifications; Pushgateway delivery verification |
 | `app.py`, `cli.py` | Start-up wiring; the `rustic-scheduler` command |
 | `tests/unit/` | Uses `tests/fake_rustic.py`, a scripted stand-in driven by a JSON plan |
@@ -74,10 +75,17 @@ with `uv`; do not add dependencies without a reason and update `uv.lock` when yo
 10. **Secrets** come from mounted files, never from the YAML, examples, logs, metrics, MQTT
     payloads or notifications. Text leaving the process goes through `redact.REDACTOR`;
     register new secret values with it. Never commit credentials.
-11. **Network control surface.** The TCP port is read-only; triggers go through the Unix
-    control socket. The only network path that can start work is the opt-in MQTT command
-    topic. It ignores retained messages, allows only `mqtt.commands.operations` (default
-    `backup`, `check`) and still applies rule 3. Do not widen it without the user asking.
+11. **Network control surface.** The metrics port (`http.port`) is read-only; triggers go
+    through the Unix control socket. Two opt-in network paths can start work: the MQTT
+    command topic (ignores retained messages, allows only `mqtt.commands.operations`) and
+    the web interface on its own port (allows only `web.operations`, requires the
+    `X-Requested-With` header and a same-origin `Origin`, optional Basic authentication
+    that fails closed). Both default to `backup`, `check` and still apply rule 3. Do not
+    widen either, and do not add mutating routes to the metrics port, without the user
+    asking.
+13. **The web page never builds HTML from data** and loads nothing inline or from other
+    sites (its Content-Security-Policy forbids both). Insert text with `textContent`. The
+    run history is the engine's in-memory list: do not add storage for it.
 12. **Two scrape endpoints** (scheduler and Pushgateway). Do not document a single combined
     endpoint unless you implement and test one.
 

@@ -75,7 +75,7 @@ ENV PATH="/app/.venv/bin:${PATH}" \
 USER 1000:1000
 WORKDIR /home/rustic
 VOLUME ["/var/lib/rustic-scheduler", "/var/cache/rustic"]
-EXPOSE 9300
+EXPOSE 9300 9301
 
 # Ready means "the scheduling loop is alive", not merely "the port answers".
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \

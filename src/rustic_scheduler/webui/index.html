@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>rustic-scheduler</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header>
+    <h1>rustic-scheduler</h1>
+    <p id="summary" class="muted">Loading…</p>
+  </header>
+  <p id="notice" role="status" hidden></p>
+  <main>
+    <section aria-labelledby="jobs-title">
+      <h2 id="jobs-title">Jobs</h2>
+      <div id="jobs"></div>
+    </section>
+
+    <section aria-labelledby="history-title">
+      <h2 id="history-title">Recent runs</h2>
+      <p id="history-note" class="muted"></p>
+      <div class="scroll">
+        <table id="history">
+          <thead>
+            <tr>
+              <th>Finished</th><th>Job</th><th>Operation</th><th>Outcome</th>
+              <th>Trigger</th><th>Duration</th><th>Detail</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section aria-labelledby="manual-title">
+      <h2 id="manual-title">Using Rustic directly</h2>
+      <p>
+        The repository is an ordinary Rustic repository: you can inspect it and restore from it
+        with the <code>rustic</code> command, without the scheduler. The commands below are
+        filled in from each job's configuration. Passwords and credentials are never shown;
+        they stay in the files your profiles and environment point to.
+      </p>
+      <div id="manual"></div>
+      <ul class="notes">
+        <li>
+          <strong>Listing and checking are safe at any time</strong>, also while the scheduler
+          is running a backup. <code>snapshots</code>, <code>ls</code> and
+          <code>restore --dry-run</code> read metadata only.
+        </li>
+        <li>
+          <strong>Do not run <code>forget</code> or <code>prune</code> by hand</strong> unless
+          you mean to: they delete data and skip the scheduler's safeguards (preview, the
+          job's snapshot scope, the removal limit). The in-container helper waits for the
+          scheduler's repository lock; plain <code>rustic</code> does not.
+        </li>
+        <li>
+          <strong>Cold storage.</strong> On S3 Glacier Flexible Retrieval or Deep Archive,
+          data must be retrieved before a restore or <code>check --read-data</code> can read
+          it, which takes hours and costs money. This project has not tested a Glacier
+          restore against AWS: read <code>docs/restore.md</code> and try it yourself before
+          you depend on it.
+        </li>
+        <li>
+          The default <code>check</code> proves that the metadata is consistent, not that
+          every data pack is intact. Only a restore, or <code>check --read-data</code>,
+          proves that.
+        </li>
+      </ul>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

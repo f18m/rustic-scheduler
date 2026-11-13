@@ -23,6 +23,7 @@ import json
 import logging
 import re
 import signal
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -221,6 +222,11 @@ class Engine:
         self.last_results: dict[tuple[str, Operation], OperationResult] = {}
         self.last_skips: dict[tuple[str, Operation], OperationResult] = {}
         self.progress: dict[tuple[str, Operation], Progress] = {}
+        #: Runs in flight, for status displays.
+        self.current: dict[tuple[str, Operation], OperationResult] = {}
+        #: Most recent finished and skipped runs, oldest first. In memory only:
+        #: after a restart it holds just the last result of each operation.
+        self.history: deque[OperationResult] = deque(maxlen=config.web.history_size)
         self._active: dict[tuple[str, Operation], str] = {}
         self._tasks: dict[asyncio.Task[None], tuple[str, Operation]] = {}
         self._progress_sent: dict[tuple[str, Operation], datetime] = {}
@@ -294,9 +300,11 @@ class Engine:
                 self.metrics.declare(name, operation)
                 # Replaces a retained `running` left behind by a crash.
                 self._publish_state((name, operation))
-        for result in self.state.load():
+        restored = sorted(self.state.load(), key=lambda r: r.finished_at or now)
+        for result in restored:
             if result.job not in self.runtimes:
                 continue  # a job that was removed from the configuration
+            self.history.append(result)
             self.last_results[(result.job, result.operation)] = result
             self.metrics.set_last_result(result)
             if result.reason == Reason.SCHEDULER_RESTART:
@@ -561,6 +569,7 @@ class Engine:
         self.metrics.running.labels(*key).set(1)
         self.metrics.clear_progress(*key)
         self.progress.pop(key, None)
+        self.current[key] = result
         self.state.mark_running(result)
         self._event(runtime.name, operation, "started", {"trigger": str(trigger)})
         log.info("job %s: %s started (%s)", runtime.name, operation, trigger)
@@ -854,6 +863,8 @@ class Engine:
     def _finish(self, result: OperationResult) -> None:
         key = (result.job, result.operation)
         self.last_results[key] = result
+        self.history.append(result)
+        self.current.pop(key, None)
         self.last_skips.pop(key, None)
         self.progress.pop(key, None)
         self._progress_sent.pop(key, None)
@@ -892,6 +903,7 @@ class Engine:
             detail=detail,
         )
         self.last_skips[(job, operation)] = result
+        self.history.append(result)
         self.metrics.count_result(result)
         # A skip does not replace the outcome of a run that is still going on.
         if self._active.get((job, operation)) != "running":
@@ -982,6 +994,7 @@ class Engine:
                 last = self.last_results.get(key)
                 skip = self.last_skips.get(key)
                 progress = self.progress.get(key)
+                current = self.current.get(key)
                 entry = next(
                     (e for e in self.entries if e.job == name and e.operation == operation), None
                 )
@@ -991,6 +1004,10 @@ class Engine:
                     continue
                 operations[str(operation)] = {
                     "state": self._active.get(key, "idle"),
+                    "started_at": (
+                        current.started_at.isoformat() if current and current.started_at else None
+                    ),
+                    "trigger": str(current.trigger) if current else None,
                     "next_run": entry.next_fire.isoformat() if entry else None,
                     "schedule": entry.schedule.describe() if entry else None,
                     "progress": progress.to_dict() if progress else None,

@@ -25,6 +25,7 @@ from .notify import Notifier
 from .profiles import ProfileError, analyse, profile_args, show_config
 from .redact import RedactingFilter
 from .state import StateStore
+from .web import WebServer
 
 log = logging.getLogger(__name__)
 
@@ -181,6 +182,7 @@ async def serve(config_path: Path) -> int:
     notifier = Notifier(config.notifications, metrics) if config.notifications.enabled else None
     engine = Engine(config, runtimes, metrics, state, mqtt=mqtt, notifier=notifier)
     server = HttpServer(engine, config.http.host, config.http.port, state.control_socket)
+    web = WebServer(engine, config.web, version) if config.web.enabled else None
     if mqtt:
         connect_mqtt_features(config, engine, mqtt, metrics)
 
@@ -204,6 +206,15 @@ async def serve(config_path: Path) -> int:
         if mqtt_task:
             mqtt_task.cancel()
         return 1
+    if web:
+        try:
+            await web.start()
+        except OSError as exc:
+            log.error("cannot listen on %s:%s: %s", config.web.host, config.web.port, exc)
+            await server.stop()
+            if mqtt_task:
+                mqtt_task.cancel()
+            return 1
     await engine.start()
     await stop.wait()
     log.info("shutting down: stopping running operations")
@@ -212,6 +223,8 @@ async def serve(config_path: Path) -> int:
         await notifier.drain()
     if mqtt and mqtt_task:
         await mqtt.stop(mqtt_task)
+    if web:
+        await web.stop()
     await server.stop()
     with contextlib.suppress(Exception):
         os.sync()

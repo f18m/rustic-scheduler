@@ -68,6 +68,7 @@ unknown is an absent series, never zero.**
 | `rustic_scheduler_mqtt_connected` | | |
 | `rustic_scheduler_mqtt_messages_total` | `result` | `published`, `dropped`, `connection_error`. |
 | `rustic_scheduler_mqtt_commands_total` | `result` | Command messages: `accepted`, `rejected`, `invalid`. |
+| `rustic_scheduler_web_commands_total` | `result` | Run requests from the web interface: `accepted`, `rejected`. |
 | `rustic_scheduler_notifications_total` | `event`, `result` | `sent` or `failed`. |
 | `rustic_scheduler_notification_last_failure_timestamp_seconds` | | |
 | `rustic_scheduler_state_write_errors_total` | | |

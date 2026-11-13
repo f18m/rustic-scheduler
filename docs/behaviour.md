@@ -151,6 +151,9 @@ the operations listed in `mqtt.commands.operations`; its trigger is `mqtt`. One 
 message for an operation that is already queued or running is refused without recording a
 skipped run. See [mqtt.md](mqtt.md#commands).
 
+With `web.enabled`, the "Run now" buttons of the web interface do the same, limited to
+`web.operations`; the trigger is `web`. See [web.md](web.md).
+
 ## Retries
 
 `retries` repeats an operation after a plain failure (non-zero exit), waiting `retry_delay`
