@@ -105,7 +105,7 @@ jobs:
       days: [mon, wed, fri]                  # or `daily`
       times: ["02:30", "14:30"]
       timezone: Europe/Rome                  # optional per schedule
-    snapshots: {enabled: true}               # telemetry after each backup
+    snapshots: {enabled: true}               # telemetry after each backup: count, size and files of the latest snapshot
     forget:
       enabled: true
       dry_run: true                          # preview until you remove this

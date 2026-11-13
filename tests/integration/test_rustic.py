@@ -276,6 +276,34 @@ def shared_repo_jobs(real, **one):
     }
 
 
+async def test_latest_snapshot_size_and_file_count_cover_unchanged_files(real):
+    """Rustic's snapshot summary counts every file of the snapshot, not just what was added."""
+    source = real.root / "totals-source"
+    (source / "sub").mkdir(parents=True)
+    (source / "a.bin").write_bytes(b"a" * 1000)
+    (source / "sub" / "b.bin").write_bytes(b"b" * 2500)
+    (source / "c.txt").write_text("hi\n")
+    job = real.job(sources=[str(source)], snapshots={"enabled": True})
+    engine = await real.engine(real.config({"totals": job}))
+    await run(engine, "totals")
+    (source / "d.txt").write_text("more\n")  # one new file next to three unchanged ones
+    backup = await run(engine, "totals")
+    assert backup.data["files_new"] == 1 and backup.data["files_unmodified"] == 3
+
+    files = [path for path in source.rglob("*") if path.is_file()]
+    size = sum(path.stat().st_size for path in files)
+    telemetry = engine.last_results[("totals", Operation.SNAPSHOTS)]
+    assert telemetry.outcome == Outcome.SUCCEEDED
+    assert telemetry.data["latest_files"] == len(files) == 4
+    assert telemetry.data["latest_bytes"] == size == 3508
+    assert metric(engine.metrics, "rustic_scheduler_snapshot_latest_files", {"job": "totals"}) == 4
+    assert (
+        metric(engine.metrics, "rustic_scheduler_snapshot_latest_bytes", {"job": "totals"}) == size
+    )
+    facts = engine.status()["jobs"]["totals"]["snapshots"]
+    assert facts["latest_files"] == 4 and facts["latest_bytes"] == size and facts["count"] == 2
+
+
 async def test_snapshot_telemetry_is_per_job_on_a_shared_repository(real):
     engine = await real.engine(real.config(shared_repo_jobs(real)))
     await run(engine, "one")

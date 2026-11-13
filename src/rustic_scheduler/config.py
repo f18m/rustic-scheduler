@@ -248,6 +248,8 @@ class CheckConfig(_OperationConfig):
 
 class JobConfig(_Model):
     profiles: list[str] = Field(min_length=1)
+    #: Free text for people: shown in the web interface and the status output only.
+    description: str | None = Field(default=None, max_length=300)
     #: Paths passed to `rustic backup`. Empty means "use the sources in the profiles".
     sources: list[str] = Field(default_factory=list)
     #: Snapshot label that identifies this job's snapshots. Defaults to the job name.
@@ -279,6 +281,12 @@ class JobConfig(_Model):
         for source in self.sources:
             if not source.startswith("/"):
                 raise ValueError(f"source {source!r} must be an absolute path")
+        if self.description is not None and (
+            not self.description.strip() or not self.description.isprintable()
+        ):
+            raise ValueError(
+                "description must be one line of text (no line breaks or control characters)"
+            )
         if len(set(self.profiles)) != len(self.profiles):
             raise ValueError("the same profile is listed twice")
         for value, what in ((self.label, "label"), (self.host, "host")):

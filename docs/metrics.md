@@ -58,7 +58,7 @@ unknown is an absent series, never zero.**
 | `rustic_scheduler_backup_last_files_new`, `_files_changed`, `_files_unmodified`, `_total_files_processed`, `_total_bytes_processed`, `_data_added`, `_data_added_packed`, `_snapshots_saved` | job | From the last **succeeded** backup. |
 | `rustic_scheduler_snapshots` | job | Snapshots in the job's scope. |
 | `rustic_scheduler_snapshot_latest_timestamp_seconds`, `_oldest_timestamp_seconds` | job | Absent when there is no snapshot. |
-| `rustic_scheduler_snapshot_latest_bytes` | job | Bytes processed by the newest snapshot. |
+| `rustic_scheduler_snapshot_latest_bytes`, `rustic_scheduler_snapshot_latest_files` | job | Total size and number of the files in the newest snapshot of the job, unchanged files included (not what that backup added). Read from the summary Rustic stored in the snapshot; absent when there is no snapshot or it has no summary. |
 | `rustic_scheduler_snapshot_collection_timestamp_seconds` | job | Last successful telemetry collection. Alert on its age. |
 | `rustic_scheduler_snapshot_collection_errors_total` | job | |
 | `rustic_scheduler_forget_last_removed`, `_last_kept`, `_last_dry_run` | job | Last forget; in a dry run, what would be removed. |

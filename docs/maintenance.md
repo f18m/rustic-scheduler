@@ -45,7 +45,8 @@ Runs `rustic snapshots --json --filter-label <label>` (plus `--filter-host` if t
 
 - `rustic_scheduler_snapshots`: number of snapshots
 - `rustic_scheduler_snapshot_latest_timestamp_seconds`, `..._oldest_timestamp_seconds`
-- `rustic_scheduler_snapshot_latest_bytes`
+- `rustic_scheduler_snapshot_latest_bytes`, `rustic_scheduler_snapshot_latest_files`: total
+  size and number of files in the newest snapshot
 - `rustic_scheduler_snapshot_collection_timestamp_seconds`: when this last worked
 - `rustic_scheduler_snapshot_collection_errors_total`
 
@@ -55,6 +56,20 @@ writes on every backup; see
 counted separately. If Rustic ever returns a snapshot with another label, the result is
 discarded and the collection fails with `scope_violation` rather than exporting mixed
 numbers.
+
+**Size and file count.** Rustic stores a summary in every snapshot it writes. Its
+`total_bytes_processed` and `total_files_processed` cover every file in the snapshot,
+unchanged ones included, so they are the snapshot's total size (before deduplication and
+compression) and file count, not what the backup added. The scheduler reads them from the
+`snapshots --json` listing it already runs: no extra command and no walk through the
+snapshot. They are also in the MQTT result (`latest_bytes`, `latest_files`), in Home
+Assistant and on the web page. Limits:
+
+- Only the single newest snapshot is described. A job whose profiles define several
+  `[[backup.snapshots]]` writes several snapshots per run; for the whole run use
+  `rustic_scheduler_backup_last_total_bytes_processed` and `..._total_files_processed`.
+- A snapshot without a summary (written by another tool) gives no value, not 0.
+- Directories are not counted, and the size is that of the file contents.
 
 **Staleness.** When a collection fails, the previous values stay and
 `snapshot_collection_timestamp_seconds` stops advancing. Alert on its age. An empty scope

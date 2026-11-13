@@ -392,6 +392,12 @@ async def test_snapshot_telemetry_values(sandbox):
         == latest
     )
     assert metric(engine.metrics, "rustic_scheduler_snapshot_latest_bytes", {"job": "docs"}) == 4242
+    assert metric(engine.metrics, "rustic_scheduler_snapshot_latest_files", {"job": "docs"}) == 17
+    assert result.data["latest_bytes"] == 4242 and result.data["latest_files"] == 17
+    facts = engine.status()["jobs"]["docs"]["snapshots"]
+    assert facts["count"] == 2 and facts["latest_id"] == "b" * 8
+    assert facts["latest_bytes"] == 4242 and facts["latest_files"] == 17
+    assert facts["latest_at"] == "2026-01-03T09:00:00+00:00"
     args = sandbox.journal()[0]["argv"]
     assert args[args.index("--filter-label") + 1] == "docs"
 
@@ -806,3 +812,32 @@ async def test_no_catch_up_outside_the_grace_window_or_with_skip_policy(sandbox)
     assert sandbox.journal() == []
     await start_after_downtime(sandbox, state=old, job={"missed_run_policy": "skip"})
     assert sandbox.journal() == []
+
+
+async def test_snapshot_without_a_summary_leaves_size_and_files_unknown(sandbox):
+    bare = snapshot("docs", "2026-01-03T10:00:00+01:00")
+    del bare["summary"]
+    sandbox.write_plan({"snapshots": {"stdout": [snapshots_json(bare)]}})
+    engine = await sandbox.engine(sandbox.config({"docs": full_job()}))
+    result = await run(engine, operation=Operation.SNAPSHOTS)
+    assert result.outcome == Outcome.SUCCEEDED
+    assert result.data["latest_bytes"] is None and result.data["latest_files"] is None
+    for name in (
+        "rustic_scheduler_snapshot_latest_bytes",
+        "rustic_scheduler_snapshot_latest_files",
+    ):
+        assert metric(engine.metrics, name, {"job": "docs"}) is None  # absent, not 0
+    assert metric(engine.metrics, "rustic_scheduler_snapshots", {"job": "docs"}) == 1
+
+
+async def test_snapshot_totals_are_dropped_when_the_newest_snapshot_has_none(sandbox):
+    bare = snapshot("docs", "2026-01-05T10:00:00+01:00", "c")
+    bare["summary"] = {"total_bytes_processed": "many", "total_files_processed": True}
+    first = snapshots_json(snapshot("docs", "2026-01-03T10:00:00+01:00"))
+    sandbox.write_plan({"snapshots": [{"stdout": [first]}, {"stdout": [snapshots_json(bare)]}]})
+    engine = await sandbox.engine(sandbox.config({"docs": full_job()}))
+    await run(engine, operation=Operation.SNAPSHOTS)
+    assert metric(engine.metrics, "rustic_scheduler_snapshot_latest_files", {"job": "docs"}) == 17
+    await run(engine, operation=Operation.SNAPSHOTS)
+    assert metric(engine.metrics, "rustic_scheduler_snapshot_latest_files", {"job": "docs"}) is None
+    assert metric(engine.metrics, "rustic_scheduler_snapshot_latest_bytes", {"job": "docs"}) is None

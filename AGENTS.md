@@ -103,6 +103,9 @@ with `uv`; do not add dependencies without a reason and update `uv.lock` when yo
 - **Pinned versions.** Rustic (`SUPPORTED_RUSTIC_VERSION`, `scripts/install-rustic.sh`,
   `docker/Dockerfile`), the base images and the service images in tests and `compose.yaml`
   are pinned, some by digest. Bump them deliberately and together, and rerun everything.
+- **The version is the Git tag.** There is no version number in the sources: `hatch-vcs`
+  derives it at build time and `__version__` reads the installed metadata. The image build
+  gets it as the `VERSION` build argument from `scripts/version.sh`. Do not hard-code one.
 - **Configuration changes** need: the model in `config.py` (unknown keys are rejected), an
   actionable error message with the setting's path, a row in `docs/configuration.md`, an
   entry in `examples/config.yaml` if users will want it, and tests for both the valid and the

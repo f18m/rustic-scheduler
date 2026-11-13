@@ -65,6 +65,7 @@ notifications:
 jobs:
   # Daily backup to S3 with Glacier Deep Archive as cold storage.
   documents:
+    description: Family documents, nightly to S3 Deep Archive   # optional, shown on the web page
     profiles: [s3-deep-archive, documents]   # earlier profiles win on conflicts
     sources: [/data/documents]
     schedule:

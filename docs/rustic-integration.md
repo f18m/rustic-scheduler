@@ -138,7 +138,9 @@ backup is `failed`, although the other snapshots were saved.
 `snapshot_id` is absent when no snapshot was saved.
 
 **Snapshots** (`snapshots --json`): a list of groups, each with `snapshots`. The scheduler
-uses `time`, `label`, `hostname`, `id` and `summary.total_bytes_processed`.
+uses `time`, `label`, `hostname`, `id` and, from the newest snapshot's `summary`,
+`total_bytes_processed` and `total_files_processed`: the size and number of all files in the
+snapshot, unchanged ones included.
 
 **Forget** (`forget --json`): a list of groups, each with `items` holding `snapshot`, `keep`
 and `reasons`.

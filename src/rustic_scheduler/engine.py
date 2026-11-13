@@ -26,7 +26,7 @@ import signal
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from . import commands
@@ -172,10 +172,38 @@ def summarise_snapshots(payload: Any, runtime: JobRuntime) -> dict[str, Any]:
         data["latest"] = latest_time.timestamp()
         data["oldest"] = times[0][0].timestamp()
         data["latest_id"] = str(latest.get("id", ""))[:8]
-        data["latest_bytes"] = (latest.get("summary") or {}).get("total_bytes_processed")
+        # Totals of everything in the snapshot, unchanged files included, as Rustic
+        # recorded them when it wrote the snapshot. A snapshot without a summary
+        # (written by another tool) leaves them unknown.
+        summary = latest.get("summary")
+        summary = summary if isinstance(summary, dict) else {}
+        data["latest_bytes"] = _count(summary.get("total_bytes_processed"))
+        data["latest_files"] = _count(summary.get("total_files_processed"))
     else:
-        data.update(latest=None, oldest=None, latest_bytes=None)
+        data.update(latest=None, oldest=None, latest_bytes=None, latest_files=None)
     return data
+
+
+def _count(value: Any) -> int | None:
+    """A non-negative integer Rustic reported, or ``None``: unknown is not zero."""
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def snapshot_facts(result: OperationResult) -> dict[str, Any]:
+    """What a succeeded telemetry run established about a job's snapshots, for status displays."""
+
+    def when(seconds: Any) -> str | None:
+        return None if seconds is None else datetime.fromtimestamp(seconds, UTC).isoformat()
+
+    data = result.data
+    return {
+        "count": data.get("count"),
+        "latest_at": when(data.get("latest")),
+        "latest_id": data.get("latest_id"),
+        "latest_bytes": data.get("latest_bytes"),
+        "latest_files": data.get("latest_files"),
+        "collected_at": result.finished_at.isoformat() if result.finished_at else None,
+    }
 
 
 def summarise_forget(payload: Any, runtime: JobRuntime) -> dict[str, Any]:
@@ -227,6 +255,9 @@ class Engine:
         #: Most recent finished and skipped runs, oldest first. In memory only:
         #: after a restart it holds just the last result of each operation.
         self.history: deque[OperationResult] = deque(maxlen=config.web.history_size)
+        #: Per job, what the last succeeded snapshot telemetry found. A later
+        #: failed collection does not erase it; `collected_at` shows its age.
+        self.snapshot_facts: dict[str, dict[str, Any]] = {}
         self._active: dict[tuple[str, Operation], str] = {}
         self._tasks: dict[asyncio.Task[None], tuple[str, Operation]] = {}
         self._progress_sent: dict[tuple[str, Operation], datetime] = {}
@@ -306,6 +337,7 @@ class Engine:
                 continue  # a job that was removed from the configuration
             self.history.append(result)
             self.last_results[(result.job, result.operation)] = result
+            self._remember_snapshots(result)
             self.metrics.set_last_result(result)
             if result.reason == Reason.SCHEDULER_RESTART:
                 log.warning(
@@ -863,6 +895,7 @@ class Engine:
     def _finish(self, result: OperationResult) -> None:
         key = (result.job, result.operation)
         self.last_results[key] = result
+        self._remember_snapshots(result)
         self.history.append(result)
         self.current.pop(key, None)
         self.last_skips.pop(key, None)
@@ -889,6 +922,10 @@ class Engine:
             f": {result.detail}" if result.detail else "",
         )
         self._announce(result)
+
+    def _remember_snapshots(self, result: OperationResult) -> None:
+        if result.operation == Operation.SNAPSHOTS and result.outcome == Outcome.SUCCEEDED:
+            self.snapshot_facts[result.job] = snapshot_facts(result)
 
     def _skip(
         self, job: str, operation: Operation, trigger: Trigger, reason: Reason, detail: str
@@ -1015,8 +1052,11 @@ class Engine:
                     "last_skip": skip.to_dict() if skip else None,
                 }
             jobs[name] = {
+                "description": runtime.job.description,
                 "label": runtime.label,
                 "host": runtime.job.host,
+                # None until snapshot telemetry has succeeded once (or when it is off).
+                "snapshots": self.snapshot_facts.get(name),
                 "repository_lock": runtime.lock_key,
                 "repository_busy": self.locks.is_busy(runtime.lock_key),
                 "operations": operations,

@@ -105,6 +105,7 @@ topics and file names.
 | Setting | Default | Meaning |
 |---|---|---|
 | `profiles` | required | Rustic profiles, in order. A name is looked up as `<profile_dir>/<name>.toml`; absolute paths are allowed. |
+| `description` | none | One line of free text for people, at most 300 characters. Shown on the web page, in `rustic-scheduler status` and in `/api/v1/status`. Not sent to Rustic, and not a metric label or MQTT topic. |
 | `sources` | `[]` | Absolute paths passed to `rustic backup`. All of them go into **one** snapshot. Empty: Rustic uses the `[[backup.snapshots]]` sources of the profiles, one snapshot each. |
 | `label` | job name | Snapshot label. It identifies the job's snapshots and scopes telemetry and forget. |
 | `host` | none | Snapshot host name. When set it is passed to backups and also narrows the scope. Unset: Rustic uses the machine's host name. |

@@ -8,7 +8,7 @@ import aiohttp
 import pytest
 from aiohttp import web
 
-from helpers import STATUS, SUMMARY, forget_json, metric, snapshot
+from helpers import STATUS, SUMMARY, forget_json, metric, snapshot, snapshots_json
 from rustic_scheduler.config import ConfigError
 from rustic_scheduler.model import Operation, Outcome
 from rustic_scheduler.web import CSRF_HEADER, CSRF_VALUE, WebServer, create_app
@@ -388,3 +388,53 @@ async def test_web_server_listens_and_stops(sandbox):
                 assert response.status == 404
     finally:
         await server.stop()
+
+
+# ------------------------------------------- description and the latest snapshot
+
+
+async def test_overview_shows_the_description_and_the_latest_snapshot(site, sandbox):
+    listing = snapshots_json(
+        snapshot("docs", "2026-01-01T10:00:00+01:00", "a"),
+        snapshot("docs", "2026-01-03T10:00:00+01:00", "b"),
+    )
+    engine, session = await site(
+        job={"description": "Family <b>documents</b>", "snapshots": {"enabled": True}},
+        plan={"snapshots": [{"stdout": [listing]}, {"exit": 1, "stderr": ["error: boom"]}]},
+    )
+    job = (await overview(session))["jobs"][0]
+    assert job["description"] == "Family <b>documents</b>"  # the page inserts it as text
+    assert job["snapshots_enabled"] and job["snapshots"] is None  # nothing collected yet
+
+    engine.trigger("docs", Operation.SNAPSHOTS)
+    await engine.wait_idle()
+    job = (await overview(session))["jobs"][0]
+    assert job["snapshots"] == {
+        "count": 2,
+        "latest_at": "2026-01-03T09:00:00+00:00",
+        "latest_id": "b" * 8,
+        "latest_bytes": 4242,
+        "latest_files": 17,
+        "collected_at": engine.last_results[("docs", Operation.SNAPSHOTS)].finished_at.isoformat(),
+    }
+
+    # A failed collection keeps what is known; `collected_at` shows its age.
+    engine.trigger("docs", Operation.SNAPSHOTS)
+    await engine.wait_idle()
+    assert engine.last_results[("docs", Operation.SNAPSHOTS)].outcome == Outcome.FAILED
+    assert (await overview(session))["jobs"][0]["snapshots"] == job["snapshots"]
+
+
+async def test_overview_without_description_or_telemetry(site):
+    _, session = await site()
+    job = (await overview(session))["jobs"][0]
+    assert job["description"] is None
+    assert job["snapshots"] is None and not job["snapshots_enabled"]
+
+
+async def test_page_script_shows_description_and_snapshot_totals_as_text(site):
+    _, session = await site()
+    async with session.get("/app.js") as response:
+        script = await response.text()
+    assert "job.description" in script and "latest_files" in script and "latest_bytes" in script
+    assert "innerHTML" not in script

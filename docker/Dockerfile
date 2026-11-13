@@ -7,6 +7,9 @@
 # Supported platforms: linux/amd64, linux/arm64.
 
 ARG PYTHON_IMAGE=python:3.13.18-slim-bookworm@sha256:a5a7017efc5969e00ae2b91c8eb0631049a569652aa4ffc4501769049ae45c72
+# The package version, normally `scripts/version.sh` (the Git tag). The build has no
+# Git history to derive it from.
+ARG VERSION=0.0.0.dev0
 ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.13.8@sha256:5cc1805e2426484abca4ad46ea783bab281fdb225fd82d8ce6d66a81254bac85
 
 FROM ${UV_IMAGE} AS uv
@@ -38,6 +41,9 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY src ./src
+# Set only now, after the dependencies are installed: it applies to this project alone.
+ARG VERSION
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=${VERSION}
 RUN uv sync --frozen --no-dev --no-editable
 
 # ---- Runtime ---------------------------------------------------------------

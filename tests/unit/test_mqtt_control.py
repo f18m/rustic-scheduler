@@ -224,6 +224,13 @@ def test_discovery_describes_enabled_operations_and_removes_the_rest():
     assert state["options"] == ["idle", "queued", "running"]
     assert found[base + "backup_progress/config"]["expire_after"] >= 30
     assert found[base + "snapshots_count/config"]["name"] == "Snapshot count"
+    size = found[base + "snapshots_latest_bytes/config"]
+    assert size["state_topic"] == "home/backup/jobs/my.docs/snapshots/result"
+    assert size["value_template"] == "{{ value_json.data.latest_bytes | default(None) }}"
+    assert size["device_class"] == "data_size" and size["unit_of_measurement"] == "B"
+    files = found[base + "snapshots_latest_files/config"]
+    assert files["name"] == "Latest snapshot files"
+    assert files["value_template"] == "{{ value_json.data.latest_files | default(None) }}"
     # Operations that are off get an empty payload, which removes a leftover entity.
     assert found[base + "forget_outcome/config"] is None
     assert found[base + "check_state/config"] is None

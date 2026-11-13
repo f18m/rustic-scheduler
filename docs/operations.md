@@ -3,15 +3,25 @@
 ## Image
 
 ```sh
-docker build -f docker/Dockerfile -t rustic-scheduler:0.1.0 .
-docker buildx build --platform linux/amd64,linux/arm64 -f docker/Dockerfile -t rustic-scheduler:0.1.0 .
+just build            # docker build --build-arg VERSION="$(./scripts/version.sh)" ...
+just build-multiarch  # the same for linux/amd64 and linux/arm64
 ```
+
+- Version: there is no version number in the sources. It is derived from the Git tag when
+  the package is built (`hatch-vcs`): on the commit tagged `0.4.0` it is `0.4.0`, a few
+  commits later `0.4.1.dev3+g<commit>`. `just version` prints it. The image build has no Git
+  history, so it takes the version as the `VERSION` build argument; without it the image
+  reports `0.0.0.dev0`. The version is shown by `rustic-scheduler --version`, the
+  `rustic_scheduler_info` metric, the web page and Home Assistant.
+- Releasing: publish a GitHub release whose tag is the version, for example `0.4.0`
+  (a leading `v` is accepted). CI builds the image from that tag, fails if the derived
+  version differs from the tag, and publishes `:0.4.0`.
 
 - Platforms: `linux/amd64` and `linux/arm64`. Rustic also publishes `armv7` and `i686`
   builds, but they are not wired into the Dockerfile.
 - CI publishes `ghcr.io/<owner>/rustic-scheduler` on pushes to `main`, tagged `main`,
   `latest`, and `sha-<commit>`, and on published GitHub releases using the exact release Git
-  tag (for example, release `0.1.1` publishes `:0.1.1`). Pull requests build and test the
+  tag (for example, release `0.4.0` publishes `:0.4.0`). Pull requests build and test the
   image without publishing it.
 - Reproducibility: base and uv images pinned by digest; Rustic 0.11.4 pinned by SHA-256;
   Python dependencies installed from `uv.lock` with `--frozen`. The same sources give the

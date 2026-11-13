@@ -30,7 +30,11 @@ _COMMON = (
 #: Entities that exist for one operation only.
 _EXTRA = {
     Operation.BACKUP: (("progress", "sensor"), ("data_added", "sensor")),
-    Operation.SNAPSHOTS: (("count", "sensor"),),
+    Operation.SNAPSHOTS: (
+        ("count", "sensor"),
+        ("latest_bytes", "sensor"),
+        ("latest_files", "sensor"),
+    ),
 }
 _ATTRIBUTES = (
     "{{ {'reason': value_json.reason, 'detail': value_json.detail, "
@@ -114,6 +118,25 @@ def _entity(key: str, base: str, title: str, progress_expiry: int) -> dict[str, 
                 "value_template": "{{ value_json.data.count | default(None) }}",
                 "state_class": "measurement",
                 "icon": "mdi:camera-burst",
+            }
+        # Totals of the newest snapshot. A value Rustic did not record renders as
+        # None, which Home Assistant shows as unknown rather than 0.
+        case "latest_bytes":
+            return {
+                "name": "Latest snapshot size",
+                "state_topic": result,
+                "value_template": "{{ value_json.data.latest_bytes | default(None) }}",
+                "device_class": "data_size",
+                "unit_of_measurement": "B",
+                "state_class": "measurement",
+            }
+        case "latest_files":
+            return {
+                "name": "Latest snapshot files",
+                "state_topic": result,
+                "value_template": "{{ value_json.data.latest_files | default(None) }}",
+                "state_class": "measurement",
+                "icon": "mdi:file-multiple-outline",
             }
     raise ValueError(key)
 

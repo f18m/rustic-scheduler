@@ -53,7 +53,7 @@ def snapshot(label: str, when: str, ident: str = "b", host: str = "h") -> dict[s
         "paths": ["/data"],
         "tags": [],
         "id": ident * 64,
-        "summary": {"total_bytes_processed": 4242},
+        "summary": {"total_bytes_processed": 4242, "total_files_processed": 17},
     }
 
 
