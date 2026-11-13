@@ -6,7 +6,7 @@
 #   - uv by version and digest, Python packages by uv.lock (hashes)
 # Supported platforms: linux/amd64, linux/arm64.
 
-ARG PYTHON_IMAGE=python:3.13.18-slim-bookworm@sha256:a5a7017efc5969e00ae2b91c8eb0631049a569652aa4ffc4501769049ae45c72
+ARG PYTHON_IMAGE=python:3.15.2-slim-bookworm@sha256:96599df822d0e1c6bb700014a05c7f3c8cabc6e0f7ff3c4f9f69cee033b4b5d9
 ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.13.8@sha256:5cc1805e2426484abca4ad46ea783bab281fdb225fd82d8ce6d66a81254bac85
 
 FROM ${UV_IMAGE} AS uv
