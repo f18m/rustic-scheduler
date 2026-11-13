@@ -16,7 +16,7 @@ import json
 from typing import Any
 
 from . import __version__
-from .config import MqttConfig, entity_slug
+from .config import MqttConfig, WebConfig, entity_slug
 from .model import Operation
 
 #: (key, Home Assistant component). Every operation has these.
@@ -119,7 +119,7 @@ def _entity(key: str, base: str, title: str, progress_expiry: int) -> dict[str, 
 
 
 def discovery_messages(
-    mqtt: MqttConfig, operations: dict[str, list[Operation]]
+    mqtt: MqttConfig, operations: dict[str, list[Operation]], web: WebConfig
 ) -> list[tuple[str, str]]:
     """Retained (topic, payload) pairs; `operations` maps each job to its enabled ones."""
     ha = mqtt.homeassistant
@@ -142,6 +142,8 @@ def discovery_messages(
             "model": "Backup job",
             "sw_version": __version__,
         }
+        if web.enabled and web.public_url is not None:
+            device["configuration_url"] = str(web.public_url)
         for operation in Operation:
             base = f"{prefix}/jobs/{job}/{operation}"
             title = "Snapshot telemetry" if operation == Operation.SNAPSHOTS else str(operation)

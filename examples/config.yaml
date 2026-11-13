@@ -29,6 +29,7 @@ http:
 web:
   enabled: false
   port: 9301                       # also publish it in compose.yaml
+  # public_url: https://backup.example.com/   # link in Home Assistant discovery
   operations: [backup, check]      # add `forget` only if that is acceptable
   # password_file: /run/secrets/web_password   # without it there is no authentication
 

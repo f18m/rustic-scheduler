@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
 from pydantic import (
+    AnyHttpUrl,
     BaseModel,
     BeforeValidator,
     ConfigDict,
@@ -334,6 +335,8 @@ class WebConfig(_Model):
     enabled: bool = False
     host: str = "0.0.0.0"  # noqa: S104 - published or not by the container's port mapping
     port: int = Field(default=9301, ge=1, le=65535)
+    #: Externally reachable URL, published in Home Assistant discovery.
+    public_url: AnyHttpUrl | None = None
     #: Operations the page may start. `forget` and `prune` delete data, so
     #: they have to be listed explicitly. Empty: the page is read-only.
     operations: list[CommandOperation] = ["backup", "check"]
@@ -342,6 +345,18 @@ class WebConfig(_Model):
     password_file: Path | None = None
     #: Finished and skipped runs kept in memory for the history table.
     history_size: int = Field(default=50, ge=1, le=1000)
+
+    @field_validator("public_url")
+    @classmethod
+    def _public_url(cls, value: AnyHttpUrl | None) -> AnyHttpUrl | None:
+        if value is not None and (
+            value.username is not None
+            or value.password is not None
+            or value.query is not None
+            or value.fragment is not None
+        ):
+            raise ValueError("must not contain credentials, a query, or a fragment")
+        return value
 
     @model_validator(mode="after")
     def _validate(self) -> WebConfig:

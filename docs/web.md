@@ -14,6 +14,11 @@ web:
 Open `http://<host>:9301/`. With the example Compose file, publish the port first (it is
 commented out in `compose.yaml`).
 
+Set `web.public_url` to the externally reachable HTTP(S) URL to include a link in Home
+Assistant MQTT discovery when both features are enabled. This can differ from the listen
+address and port when using Docker or a reverse proxy. The URL is published to the broker
+and must not contain credentials, a query or a fragment.
+
 The page has three parts.
 
 ## Jobs

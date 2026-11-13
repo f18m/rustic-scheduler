@@ -7,7 +7,7 @@ import pytest
 
 from helpers import STATUS, SUMMARY, forget_json, metric, snapshot
 from rustic_scheduler.app import connect_mqtt_features
-from rustic_scheduler.config import ConfigError, MqttConfig, parse_config
+from rustic_scheduler.config import ConfigError, MqttConfig, WebConfig, parse_config
 from rustic_scheduler.homeassistant import discovery_messages
 from rustic_scheduler.metrics import Metrics
 from rustic_scheduler.model import Operation, Outcome
@@ -199,11 +199,11 @@ def test_configuration_errors(sandbox):
 # ----------------------------------------------------------- home assistant
 
 
-def discovery(mqtt: dict, operations) -> dict[str, dict | None]:
+def discovery(mqtt: dict, operations, web: WebConfig | None = None) -> dict[str, dict | None]:
     config = MqttConfig(enabled=True, **mqtt)
     return {
         topic: json.loads(payload) if payload else None
-        for topic, payload in discovery_messages(config, operations)
+        for topic, payload in discovery_messages(config, operations, web or WebConfig())
     }
 
 
@@ -234,6 +234,28 @@ def test_discovery_describes_enabled_operations_and_removes_the_rest():
     assert len({c["unique_id"] for c in configs}) == len(configs)
 
 
+@pytest.mark.parametrize(
+    ("web", "expected"),
+    [
+        (WebConfig(), None),
+        (WebConfig(enabled=True), None),
+        (WebConfig(enabled=False, public_url="https://backup.example/"), None),
+        (WebConfig(enabled=True, public_url="https://backup.example/"), "https://backup.example/"),
+    ],
+)
+def test_discovery_web_configuration_url(web, expected):
+    found = discovery(
+        {"homeassistant": {"enabled": True}, "commands": {"enabled": True}},
+        {"docs": [Operation.BACKUP], "photos": [Operation.BACKUP]},
+        web,
+    )
+    configs = [config for config in found.values() if config is not None]
+    assert configs
+    assert all(config["device"].get("configuration_url") == expected for config in configs)
+    assert any("/button/" in topic and config for topic, config in found.items())
+    assert any(config is None for config in found.values())
+
+
 def test_discovery_buttons_follow_the_allowed_commands():
     found = discovery(
         {
@@ -259,3 +281,18 @@ async def test_discovery_is_published_on_every_connection(sandbox):
     assert "homeassistant/sensor/rustic_scheduler/docs_check_outcome/config" in topics
     assert not any("forget" in topic for topic in topics)
     assert parse_config(sandbox.last_raw).mqtt.homeassistant.enabled
+
+
+async def test_discovery_uses_web_configuration_from_application(sandbox):
+    config = sandbox.config(
+        mqtt={"enabled": True, "homeassistant": {"enabled": True}},
+        web={"enabled": True, "public_url": "https://backup.example:8443/"},
+    )
+    publisher = MqttPublisher(config.mqtt, Metrics())
+    engine = await sandbox.engine(config, mqtt=publisher)
+    connect_mqtt_features(config, engine, publisher, engine.metrics)
+    configs = [json.loads(payload) for _, payload in publisher.birth if payload]
+    assert configs
+    assert all(
+        item["device"]["configuration_url"] == "https://backup.example:8443/" for item in configs
+    )
