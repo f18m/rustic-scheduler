@@ -51,6 +51,9 @@ services:
       - apprise.conf
     ports:
       - "127.0.0.1:9300:9300"
+      # Web interface, when `web.enabled` is set (docs/web.md). It can start
+      # operations: keep it on loopback or behind a reverse proxy with HTTPS.
+      # - "127.0.0.1:9301:9301"
     depends_on:
       - pushgateway
 

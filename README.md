@@ -13,6 +13,8 @@ backups on a schedule and tells you, truthfully, what happened.
 - Optional MQTT events, optional [Apprise](https://github.com/caronc/apprise) notifications.
 - Optional MQTT commands to start a backup, check or forget, and optional Home Assistant
   MQTT discovery (sensors and "run" buttons per job).
+- Optional web interface: running operations with progress, recent runs, "Run now" buttons
+  and ready-to-copy commands for using Rustic directly.
 - Optional snapshot telemetry, retention (`forget`), `prune` and `check`.
 - No database. History lives in Rustic's snapshots and in Prometheus.
 
@@ -39,6 +41,7 @@ Rustic runs as an external process: the pinned release is **Rustic 0.11.4**, unm
 | MQTT, notifications | **off** | None. |
 | MQTT commands | **off** | Lets MQTT messages start `backup` and `check`; `forget` and `prune` only if listed, and only if enabled on the job. |
 | Home Assistant discovery | **off** | None. |
+| Web interface | **off** | Lets its "Run now" buttons start `backup` and `check`; `forget` and `prune` only if listed, and only if enabled on the job. |
 
 Nothing that deletes anything runs unless you turn it on in the YAML. Destructive options
 found only in a Rustic profile (for example `[forget] prune = true`) are refused at start-up
@@ -140,7 +143,7 @@ The short version; details and rationale are in [docs/behaviour.md](docs/behavio
 | Timeout reached | Rustic gets SIGTERM, then SIGKILL after `stop_grace`. Outcome `failed`. |
 | Container stops | Running Rustic is stopped the same way. Outcome `interrupted`. Queued work is dropped. |
 | Scheduler crashes mid-run | After restart the run is reported as `unknown`, never as success. |
-| Manual run (CLI, or MQTT message if enabled) | Queues like a scheduled run; refused if that job is already queued or running. |
+| Manual run (CLI, or MQTT message or web interface if enabled) | Queues like a scheduled run; refused if that job is already queued or running. |
 
 ### Outcomes
 
@@ -183,6 +186,7 @@ Other endpoints on port 9300: `/healthz` and `/readyz` (both follow the scheduli
 heartbeat, not merely "the port answers") and `/api/v1/status` (JSON with full diagnostics).
 
 - MQTT topics, payloads, commands and Home Assistant: [docs/mqtt.md](docs/mqtt.md)
+- Web interface (`web.enabled`, port 9301): [docs/web.md](docs/web.md)
 - Notifications: [docs/notifications.md](docs/notifications.md)
 
 ## Working on the repository yourself
@@ -199,6 +203,8 @@ docker compose exec rustic-scheduler rustic-scheduler forget-preview documents  
 
 For commands that change the repository (`forget`, `prune`, `repair`, ...) the helper first
 waits for the scheduler's repository lock, so it never overlaps a scheduled operation.
+
+The optional [web interface](docs/web.md) shows these commands filled in for each job.
 
 ## Commands
 
@@ -223,6 +229,7 @@ rustic-scheduler [-c CONFIG] COMMAND
 | Rustic profiles, precedence, options the scheduler adds | [docs/rustic-integration.md](docs/rustic-integration.md) |
 | Metrics, Pushgateway, Prometheus | [docs/metrics.md](docs/metrics.md) |
 | MQTT, MQTT commands, Home Assistant discovery | [docs/mqtt.md](docs/mqtt.md) |
+| Web interface | [docs/web.md](docs/web.md) |
 | Notifications | [docs/notifications.md](docs/notifications.md) |
 | AWS S3, Glacier Deep Archive, permissions, costs | [docs/aws-s3-glacier.md](docs/aws-s3-glacier.md) |
 | Retention, prune and check | [docs/maintenance.md](docs/maintenance.md) |

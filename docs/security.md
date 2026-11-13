@@ -7,6 +7,7 @@
 | Repository password | mounted file | Rustic reads it: `password-file` in a profile |
 | AWS access key and secret | mounted shared credentials file | OpenDAL reads it: `AWS_SHARED_CREDENTIALS_FILE` |
 | MQTT password | mounted file | the scheduler reads it at each connection: `mqtt.password_file` |
+| Web interface password, if used | mounted file | the scheduler reads it at each request: `web.password_file` |
 | Apprise URLs and tokens | mounted Apprise config file | the scheduler reads it per notification: `notifications.config_files` |
 | Pushgateway basic-auth password, if used | environment `RUSTIC_PROMETHEUS_PASS` | Rustic |
 
@@ -115,9 +116,12 @@ only what should be backed up.
 | Pushgateway 9091 | read **and write** of pushed metrics | not publishing it; see [metrics.md](metrics.md#securing-it) |
 | Control socket | manual triggers | file mode 0600 in the state volume; not reachable over the network |
 | MQTT command topic (only with `mqtt.commands.enabled`) | starting the operations listed in `mqtt.commands.operations` | broker authentication, a broker ACL on `<prefix>/jobs/+/+/run`, TLS |
+| 9301, web interface (only with `web.enabled`) | status, history, the manual commands, and starting the operations listed in `web.operations` | `web.password_file`, binding to loopback or a private network, a reverse proxy with HTTPS. Plain HTTP; no authentication unless a password file is set. |
 
-By default nothing reachable over the network can start, stop or alter a backup. The one
-exception is opt-in: with `mqtt.commands.enabled`, **whoever may publish to the command topic
+By default nothing reachable over the network can start, stop or alter a backup. There are
+two opt-in exceptions. With `web.enabled`, whoever can reach the web port (and knows the
+password, if one is set) can start the operations in `web.operations`; see
+[web.md](web.md#security). And with `mqtt.commands.enabled`, **whoever may publish to the command topic
 on your broker can start those operations**. The scheduler cannot tell publishers apart, so
 the broker is the access control. Keep `forget` and `prune` out of
 `mqtt.commands.operations` unless every such publisher is allowed to delete backup data

@@ -40,6 +40,19 @@ Rustic's own options do not belong here. They stay in your Rustic TOML profiles;
 | `port` | `9300` | Listen port. |
 | `max_heartbeat_age` | `90s` | Health and readiness fail when the scheduling loop has not iterated for this long. |
 
+## `web`
+
+The optional browser interface. See [web.md](web.md).
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `enabled` | `false` | Serve the web interface. |
+| `host`, `port` | `0.0.0.0`, `9301` | Listen address. The port must differ from `http.port`, which stays read-only. |
+| `operations` | `[backup, check]` | Operations the page may start: `backup`, `snapshots`, `check`, `forget`, `prune`. `forget` and `prune` delete data and must be listed explicitly; they must also be enabled on the job. `[]` makes the page read-only. |
+| `username` | `admin` | User name for HTTP Basic authentication. Used only with `password_file`. |
+| `password_file` | none | File holding the password. Unset: no authentication. Read at each request. |
+| `history_size` | `50` | Finished and skipped runs kept in memory for the history table (1 to 1000). |
+
 ## `pushgateway`
 
 | Setting | Default | Meaning |
@@ -149,7 +162,7 @@ Label and host together must be unique among jobs.
 | Setting | Default | Meaning |
 |---|---|---|
 | `enabled` | `false` | Run `rustic prune` on a schedule. Acts on the whole repository. |
-| `schedule` | required when enabled | Not required if `prune` is listed in `mqtt.commands.operations`: it then runs on request only. |
+| `schedule` | required when enabled | Not required if `prune` is listed in `mqtt.commands.operations` or `web.operations`: it then runs on request only. |
 | `dry_run` | `false` | |
 | `timeout`, `retries`, `retry_delay`, `extra_args` | `12h`, `0`, `5m`, `[]` | |
 

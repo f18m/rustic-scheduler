@@ -31,7 +31,7 @@ What stands in for AWS in the tests is a local S3-compatible server. It proves w
 
 ## Verified against the real Rustic 0.11.4 binary
 
-By the integration tests in `tests/integration/` (40 tests), which CI runs with nothing
+By the integration tests in `tests/integration/` (42 tests), which CI runs with nothing
 skipped.
 
 **Rustic facts the design relies on**
@@ -114,6 +114,27 @@ running a scripted stand-in for Rustic:
 Not checked there: removal of entities through an empty payload, other Home Assistant
 versions, and how the entities look in the UI.
 
+**Web interface**
+
+- With the real binary (integration test): a backup and a check started through the run
+  route succeed with `trigger: web` and appear in the history; the "plain Rustic" commands
+  of the manual panel, run as printed against the real binary, list only that job's
+  snapshot, list its files, pass `check`, and restore a file. `restore --dry-run` restores no
+  file, but Rustic 0.11.4 does create the empty target directory.
+- With the scripted stand-in (unit tests): progress of a running backup in the overview;
+  bounded, newest-first history including skipped runs, and what it holds after a restart;
+  `forget` refused unless listed and enabled, and still previewed first; refusal of a second
+  request without a recorded skip; requests without the page's header or with a foreign
+  `Origin` refused; Basic authentication on every route, password rotation, and an
+  unreadable password file failing closed; no secret value in the manual commands.
+- One manual run, not part of the test suite: the scheduler process serving the page to
+  headless Chrome (light and dark), showing a running backup's progress, a failed check, the
+  history and the manual panel; the metrics port still refused a run request.
+
+Not checked: clicking the buttons in a browser (the request they send was tested, the click
+and the confirmation dialog were not); the copy buttons; browsers other than Chrome; the
+page behind a reverse proxy; progress display for operations other than backup.
+
 **Apprise** (real library, local HTTP receiver)
 
 - Success and failure notifications delivered with the documented content.
@@ -129,7 +150,7 @@ versions, and how the entities look in the UI.
 
 ## Verified with a scripted stand-in for Rustic
 
-The unit tests in `tests/unit/` (209 tests) cover logic that needs precise control over
+The unit tests in `tests/unit/` (235 tests) cover logic that needs precise control over
 timing and failure: configuration validation and error messages; schedule arithmetic across
 time zones and both DST transitions; command construction; profile conflict analysis; the
 process runner (timeouts, SIGKILL escalation, process groups, long lines); every outcome and

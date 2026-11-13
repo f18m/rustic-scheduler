@@ -2,15 +2,20 @@
 
 import asyncio
 import json
+import shlex
+import subprocess
 from pathlib import Path
 
+import aiohttp
 import pytest
+from aiohttp import web
 
 from helpers import metric
 from rustic_scheduler import SUPPORTED_RUSTIC_VERSION
 from rustic_scheduler.app import prepare, rustic_version
 from rustic_scheduler.config import ConfigError
 from rustic_scheduler.model import Operation, Outcome, Reason, Trigger
+from rustic_scheduler.web import CSRF_HEADER, CSRF_VALUE, create_app
 
 pytestmark = pytest.mark.integration
 
@@ -451,3 +456,61 @@ async def test_two_jobs_on_one_real_repository_run_one_after_the_other(real):
     assert one.outcome == two.outcome == Outcome.SUCCEEDED
     assert one_telemetry.finished_at <= two.started_at  # the whole pipeline of `one` finished first
     assert real.rustic("check").returncode == 0
+
+
+# ------------------------------------------------------------ web interface
+
+
+async def test_web_interface_starts_real_runs_and_its_manual_commands_work(real, short_tmp):
+    """A backup and a check from the page, then the commands its panel prints, run as printed."""
+    config = real.config(
+        {"docs": real.job(check={"enabled": True}), "other": real.job(label="other")},
+        web={"enabled": True},
+    )
+    engine = await real.engine(config)
+    runner = web.AppRunner(create_app(engine, config.web, SUPPORTED_RUSTIC_VERSION))
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]
+    try:
+        async with aiohttp.ClientSession(base_url=f"http://127.0.0.1:{port}") as session:
+            for job, operation in (("docs", "backup"), ("other", "backup"), ("docs", "check")):
+                async with session.post(
+                    f"/api/v1/jobs/{job}/{operation}/run", headers={CSRF_HEADER: CSRF_VALUE}
+                ) as response:
+                    assert response.status == 202
+                await engine.wait_idle()
+            async with session.get("/api/v1/overview") as response:
+                data = await response.json()
+    finally:
+        await runner.cleanup()
+
+    assert [(h["job"], h["operation"], h["outcome"], h["trigger"]) for h in data["history"]] == [
+        ("docs", "check", "succeeded", "web"),
+        ("other", "backup", "succeeded", "web"),
+        ("docs", "backup", "succeeded", "web"),
+    ]
+    assert "integration-test-password" not in json.dumps(data)
+
+    # The "plain Rustic" commands of the panel, with the real binary in place of `rustic`.
+    manual = next(job for job in data["jobs"] if job["name"] == "docs")["manual"]
+    assert manual["scope"] == "--filter-label docs --filter-host testhost"
+    base = [real.binary, *shlex.split(manual["profiles"])]
+
+    def rustic(*args: str) -> str:
+        done = subprocess.run([*base, *args], env=real.env, capture_output=True, text=True)
+        assert done.returncode == 0, done.stderr
+        return done.stdout
+
+    groups = json.loads(rustic("snapshots", "--json", *shlex.split(manual["scope"])))
+    (snap,) = [s for g in groups for s in g["snapshots"]]  # only this job's, not `other`'s
+    assert snap["label"] == "docs"
+    assert "a.txt" in rustic("ls", snap["id"])
+    rustic("check")
+    target = short_tmp / "restored"
+    rustic("restore", "--dry-run", snap["id"], str(target))
+    # Rustic 0.11.4 creates the empty target directory even for a dry run, and nothing else.
+    assert not target.exists() or list(target.iterdir()) == []
+    rustic("restore", f"{snap['id']}:{real.source}", str(target))
+    assert (target / "a.txt").read_text() == "alpha\n"

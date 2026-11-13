@@ -166,6 +166,9 @@ class Metrics:
         self.mqtt_commands = counter(
             "mqtt_commands_total", "MQTT command messages by result", ["result"]
         )
+        self.web_commands = counter(
+            "web_commands_total", "Run requests from the web interface by result", ["result"]
+        )
         self.notifications = counter(
             "notifications_total", "Notification attempts by event and result", ["event", "result"]
         )

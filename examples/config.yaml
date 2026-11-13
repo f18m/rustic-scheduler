@@ -24,6 +24,14 @@ rustic:
 http:
   port: 9300
 
+# Optional browser interface: state, progress, recent runs, "Run now" buttons and
+# commands for using Rustic directly. See docs/web.md before enabling it.
+web:
+  enabled: false
+  port: 9301                       # also publish it in compose.yaml
+  operations: [backup, check]      # add `forget` only if that is acceptable
+  # password_file: /run/secrets/web_password   # without it there is no authentication
+
 # Rustic pushes its own rustic_backup_* metrics here after each snapshot.
 pushgateway:
   url: http://pushgateway:9091

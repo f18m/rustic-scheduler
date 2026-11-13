@@ -39,6 +39,7 @@ class Trigger(StrEnum):
     CATCH_UP = "catch_up"
     MANUAL = "manual"
     MQTT = "mqtt"
+    WEB = "web"
     AFTER_BACKUP = "after_backup"
 
 

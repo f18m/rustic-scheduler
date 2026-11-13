@@ -318,11 +318,36 @@ class RusticConfig(_Model):
     env: dict[str, str] = Field(default_factory=dict)
 
 
+CommandOperation = Literal["backup", "snapshots", "check", "forget", "prune"]
+
+
 class HttpConfig(_Model):
     host: str = "0.0.0.0"  # noqa: S104 - a metrics endpoint must be reachable by Prometheus
     port: int = Field(default=9300, ge=1, le=65535)
     #: A loop heartbeat older than this makes /healthz and /readyz fail.
     max_heartbeat_age: Duration = timedelta(seconds=90)
+
+
+class WebConfig(_Model):
+    """Browser interface on its own port. Off unless enabled."""
+
+    enabled: bool = False
+    host: str = "0.0.0.0"  # noqa: S104 - published or not by the container's port mapping
+    port: int = Field(default=9301, ge=1, le=65535)
+    #: Operations the page may start. `forget` and `prune` delete data, so
+    #: they have to be listed explicitly. Empty: the page is read-only.
+    operations: list[CommandOperation] = ["backup", "check"]
+    #: HTTP Basic authentication, required when `password_file` is set.
+    username: str = "admin"
+    password_file: Path | None = None
+    #: Finished and skipped runs kept in memory for the history table.
+    history_size: int = Field(default=50, ge=1, le=1000)
+
+    @model_validator(mode="after")
+    def _validate(self) -> WebConfig:
+        if not self.username or ":" in self.username:
+            raise ValueError("username must be non-empty and must not contain ':'")
+        return self
 
 
 class PushgatewayConfig(_Model):
@@ -343,9 +368,6 @@ class MqttTlsConfig(_Model):
     key_file: Path | None = None
     #: Skip certificate verification. For test brokers only.
     insecure: bool = False
-
-
-CommandOperation = Literal["backup", "snapshots", "check", "forget", "prune"]
 
 
 class MqttCommandsConfig(_Model):
@@ -437,6 +459,7 @@ class Config(_Model):
     scheduler: SchedulerConfig = SchedulerConfig()
     rustic: RusticConfig = RusticConfig()
     http: HttpConfig = HttpConfig()
+    web: WebConfig = WebConfig()
     pushgateway: PushgatewayConfig = PushgatewayConfig()
     mqtt: MqttConfig = MqttConfig()
     notifications: NotificationsConfig = NotificationsConfig()
@@ -500,8 +523,10 @@ def _semantic_problems(config: Config) -> list[str]:
             except ValueError as exc:
                 problems.append(f"{where}.{key}: {exc}")
         # An enabled operation that nothing would ever start is a mistake, unless
-        # it is meant to be started by MQTT message.
+        # it is meant to be started by MQTT message or from the web interface.
         on_demand = set(config.mqtt.commands.operations) if config.mqtt.commands.enabled else set()
+        if config.web.enabled:
+            on_demand |= set(config.web.operations)
         unstartable = [
             ("forget", job.forget.enabled, job.forget.after_backup, job.forget.schedule),
             ("prune", job.prune.enabled, False, job.prune.schedule),
@@ -517,7 +542,8 @@ def _semantic_problems(config: Config) -> list[str]:
             )
             problems.append(
                 f"{where}.{operation}: {operation} is enabled but has {needs}; add one, or "
-                f"list {operation} in mqtt.commands.operations to run it on request only"
+                f"list {operation} in mqtt.commands.operations or web.operations to run it "
+                "on request only"
             )
         # Two jobs with the same label and host could not be told apart, so
         # one job's retention would act on the other's snapshots.
@@ -555,6 +581,15 @@ def _semantic_problems(config: Config) -> list[str]:
         ):
             if secret is not None and not secret.is_file():
                 problems.append(f"{what}: file {secret} does not exist")
+    if config.web.enabled:
+        if config.web.port == config.http.port:
+            problems.append(
+                "web.port: the web interface needs its own port, different from http.port "
+                "(which stays read-only)"
+            )
+        secret = config.web.password_file
+        if secret is not None and not secret.is_file():
+            problems.append(f"web.password_file: file {secret} does not exist")
     if config.notifications.enabled:
         for config_file in config.notifications.config_files:
             if not config_file.is_file():
