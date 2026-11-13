@@ -18,7 +18,16 @@ The page has three parts.
 
 ## Jobs
 
-One card per job, one row per operation that is enabled for it:
+One card per job. Under the job's name:
+
+- its `description`, when the job has one;
+- **Latest snapshot**: time, total size and number of files of the job's newest snapshot,
+  the number of snapshots, and when this was last read from the repository. It comes from
+  snapshot telemetry ([maintenance.md](maintenance.md#snapshot-telemetry)), so the job needs
+  `snapshots: {enabled: true}`; without it the page says so instead of showing a number. A
+  value Rustic did not record is shown as unknown, never as 0.
+
+Then one row per operation that is enabled for it:
 
 - **State**: `idle`, `queued` (waiting for the repository) or `running`.
 - **Progress**, while running: percentage, bytes and Rustic's estimate of the time left, as

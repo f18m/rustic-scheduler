@@ -43,6 +43,22 @@ function bytes(n) {
   return `${n.toFixed(i ? 1 : 0)} ${units[i]}`;
 }
 
+function latestSnapshot(job) {
+  const s = job.snapshots;
+  if (!s) {
+    return job.snapshots_enabled
+      ? "Latest snapshot: not collected yet (snapshot telemetry has not succeeded since it was enabled)"
+      : "Latest snapshot: unknown (snapshot telemetry is off for this job)";
+  }
+  if (!s.latest_at) return `Latest snapshot: none yet · checked ${when(s.collected_at)}`;
+  // A total Rustic did not record is shown as unknown, never as 0.
+  const size = s.latest_bytes === null ? "size unknown" : bytes(s.latest_bytes);
+  const files = s.latest_files === null ? "file count unknown"
+    : `${s.latest_files.toLocaleString()} ${s.latest_files === 1 ? "file" : "files"}`;
+  return `Latest snapshot: ${when(s.latest_at)} · ${size} · ${files} · ` +
+    `${s.count} ${s.count === 1 ? "snapshot" : "snapshots"} in total · checked ${when(s.collected_at)}`;
+}
+
 function badge(text) {
   return el("span", { class: `badge ${text}`, text });
 }
@@ -142,6 +158,8 @@ function renderJobs(data) {
     if (job.repository_busy) facts.push("repository in use");
     return el("div", { class: "card" },
       el("div", { class: "card-head" }, el("h3", { text: job.name }), el("span", { class: "small", text: facts.join(" · ") })),
+      job.description ? el("p", { class: "description", text: job.description }) : null,
+      el("p", { class: "small snapshot", text: latestSnapshot(job) }),
       el("div", { class: "scroll" }, el("table", null,
         el("thead", null, el("tr", null,
           el("th", { text: "Operation" }), el("th", { text: "State" }), el("th", { text: "Progress / next run" }),

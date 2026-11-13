@@ -119,9 +119,9 @@ def test_failure_keeps_the_previous_success_timestamp_and_summary():
 
 def test_exposition_is_valid_prometheus_text():
     metrics = Metrics()
-    metrics.info.labels("0.1.0", "0.11.4").set(1)
+    metrics.info.labels("0.4.0", "0.11.4").set(1)
     text = metrics.render().decode()
-    assert 'rustic_scheduler_info{rustic_version="0.11.4",version="0.1.0"} 1.0' in text
+    assert 'rustic_scheduler_info{rustic_version="0.11.4",version="0.4.0"} 1.0' in text
     for line in text.splitlines():
         assert line.startswith("#") or re.match(r"^[a-z_]+(\{.*\})? [0-9.e+-]+$", line), line
 

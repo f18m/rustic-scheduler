@@ -122,7 +122,12 @@ class Metrics:
             "snapshot_oldest_timestamp_seconds", "Unix time of the oldest snapshot", ["backup_job"]
         )
         self.snapshot_latest_bytes = gauge(
-            "snapshot_latest_bytes", "Bytes processed by the newest snapshot", ["backup_job"]
+            "snapshot_latest_bytes",
+            "Total size in bytes of the files in the newest snapshot",
+            ["backup_job"],
+        )
+        self.snapshot_latest_files = gauge(
+            "snapshot_latest_files", "Number of files in the newest snapshot", ["backup_job"]
         )
         self.snapshot_collected = gauge(
             "snapshot_collection_timestamp_seconds",
@@ -251,6 +256,7 @@ class Metrics:
                 (self.snapshot_latest, "latest"),
                 (self.snapshot_oldest, "oldest"),
                 (self.snapshot_latest_bytes, "latest_bytes"),
+                (self.snapshot_latest_files, "latest_files"),
             ):
                 if data.get(key) is None:
                     _drop(metric, job)

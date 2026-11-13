@@ -47,6 +47,12 @@ skipped.
 - `rustic show-config` returns the merged configuration and reflects the environment.
 - A command-line `--label` or `--tag` replaces the profile's value.
 - `--filter-label` on `snapshots` and `forget` restricts them to that label.
+- Every snapshot in `snapshots --json` carries a `summary` whose `total_files_processed` and
+  `total_bytes_processed` count all files of the snapshot, unchanged ones included: after a
+  second backup that added one file to three unchanged ones, they equal the four files and
+  their summed sizes on disk. The scheduler exports them as the latest snapshot's size and
+  file count. Not verified: snapshots written by restic or other tools, hard links, sparse
+  files and special files.
 - Missing source, wrong password, missing repository and invalid profile all exit non-zero.
 - `check --read-data` exits non-zero on a damaged pack file.
 
@@ -111,6 +117,15 @@ running a scripted stand-in for Rustic:
 - the `Run check` and `Run forget` buttons started those operations;
 - all entities turned `unavailable` when the scheduler stopped.
 
+The `Latest snapshot size` and `Latest snapshot files` sensors were added later and have
+only been checked as discovery payloads in unit tests, not in a running Home Assistant.
+
+**Version**
+
+- The package version is derived from the Git tag (`hatch-vcs`); `just e2e` builds the image
+  with that version and checks that `rustic-scheduler --version` in the container reports it.
+  Not exercised yet: a real GitHub release run of the CI workflow with this mechanism.
+
 Not checked there: removal of entities through an empty payload, other Home Assistant
 versions, and how the entities look in the UI.
 
@@ -121,7 +136,9 @@ versions, and how the entities look in the UI.
   of the manual panel, run as printed against the real binary, list only that job's
   snapshot, list its files, pass `check`, and restore a file. `restore --dry-run` restores no
   file, but Rustic 0.11.4 does create the empty target directory.
-- With the scripted stand-in (unit tests): progress of a running backup in the overview;
+- With the scripted stand-in (unit tests): the job description and the latest snapshot's
+  size and file count in the overview, kept after a later failed collection and absent
+  while telemetry is off; progress of a running backup in the overview;
   bounded, newest-first history including skipped runs, and what it holds after a restart;
   `forget` refused unless listed and enabled, and still previewed first; refusal of a second
   request without a recorded skip; requests without the page's header or with a foreign

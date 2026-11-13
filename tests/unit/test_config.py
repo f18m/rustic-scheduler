@@ -38,6 +38,12 @@ def test_minimal_config_is_valid_and_safe_by_default(base):
     assert config.label_of("docs") == "docs"
 
 
+def test_job_description_is_optional_free_text(base):
+    assert parse_config(base()).jobs["docs"].description is None
+    job = parse_config(base({"description": "Photos — nightly, to the NAS"})).jobs["docs"]
+    assert job.description == "Photos — nightly, to the NAS"
+
+
 def test_schedule_accepts_daily_and_single_values(base):
     config = parse_config(base({"schedule": {"days": "daily", "times": "02:30"}}))
     schedule = config.jobs["docs"].schedule.build(config.scheduler.timezone)
@@ -58,6 +64,9 @@ def test_schedule_accepts_daily_and_single_values(base):
         ({"bogus": 1}, "jobs.docs.bogus: unknown setting"),
         ({"backup": {"timeout": "soon"}}, "duration"),
         ({"label": "a,b"}, "comma"),
+        ({"description": "two\nlines"}, "one line of text"),
+        ({"description": "  "}, "one line of text"),
+        ({"description": "x" * 301}, "at most 300"),
         ({"forget": {"enabled": True}}, "without retention rules"),
         ({"forget": {"enabled": True, "keep": {"prune": True}}}, "keep-"),
         (

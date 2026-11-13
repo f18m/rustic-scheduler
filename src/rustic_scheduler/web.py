@@ -115,6 +115,9 @@ def overview(engine: Engine, config: WebConfig, rustic_version: str) -> dict[str
         jobs.append(
             {
                 "name": name,
+                "description": job["description"],
+                "snapshots": job["snapshots"],
+                "snapshots_enabled": Operation.SNAPSHOTS in enabled,
                 "label": job["label"],
                 "host": job["host"],
                 "repository_busy": job["repository_busy"],

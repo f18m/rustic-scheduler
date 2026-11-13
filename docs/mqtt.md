@@ -81,7 +81,8 @@ the whole operation. At most one message per `mqtt.progress_interval`.
 
 `outcome` and `reason` use the vocabulary in [behaviour.md](behaviour.md#outcomes). `data`
 depends on the operation: the backup summary; for `snapshots` `count`, `latest`, `oldest`
-(Unix seconds), `latest_id`, `latest_bytes`; for `forget` `removed`, `kept`, `removed_ids`.
+(Unix seconds), `latest_id`, `latest_bytes` and `latest_files` (total size and number of
+files in the newest snapshot, `null` when Rustic recorded none); for `forget` `removed`, `kept`, `removed_ids`.
 Skips are published as events only, so the retained result is always a run that started.
 
 Payloads pass through the same secret masking as the logs.
@@ -163,6 +164,7 @@ operation (`backup` always; `snapshots`, `check`, `forget`, `prune` when enabled
 | `Backup progress` (sensor, %) | `.../backup/progress` | Unknown when Rustic reports no ratio; unavailable when no progress arrived for a while |
 | `Backup data added` (sensor, bytes) | `.../backup/result` | |
 | `Snapshot count` (sensor) | `.../snapshots/result` | |
+| `Latest snapshot size`, `Latest snapshot files` (sensors) | `.../snapshots/result` | Total size (bytes) and number of files in the job's newest snapshot; unknown when Rustic recorded none. Need snapshot telemetry enabled on the job. |
 
 All entities become unavailable when `<prefix>/status` is `offline`.
 
