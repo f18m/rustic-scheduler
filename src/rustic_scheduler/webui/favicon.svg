@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>rustic-scheduler</title>
+  <!-- An original mark, not Rustic's logo: a rust-coloured gear (Rustic is written in
+       Rust) around a clock face (the schedule). -->
+  <g fill="#b7410e">
+    <circle cx="32" cy="32" r="23"/>
+    <g id="teeth">
+      <rect x="27" y="2" width="10" height="12" rx="2"/>
+      <rect x="27" y="50" width="10" height="12" rx="2"/>
+      <rect x="2" y="27" width="12" height="10" rx="2"/>
+      <rect x="50" y="27" width="12" height="10" rx="2"/>
+    </g>
+    <use href="#teeth" transform="rotate(45 32 32)"/>
+  </g>
+  <circle cx="32" cy="32" r="15" fill="#fff4e6"/>
+  <path d="M32 21v11l8 5" fill="none" stroke="#5a1f06" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

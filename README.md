@@ -13,8 +13,9 @@ backups on a schedule and tells you, truthfully, what happened.
 - Optional MQTT events, optional [Apprise](https://github.com/caronc/apprise) notifications.
 - Optional MQTT commands to start a backup, check or forget, and optional Home Assistant
   MQTT discovery (sensors and "run" buttons per job).
-- Optional web interface: running operations with progress, recent runs, "Run now" buttons
-  and ready-to-copy commands for using Rustic directly.
+- Optional web interface: running operations with progress, recent runs, "Run now" buttons,
+  ready-to-copy commands for using Rustic directly and, if enabled, a read-only browser for
+  each job's snapshots and the files in them.
 - Optional snapshot telemetry, retention (`forget`), `prune` and `check`.
 - No database. History lives in Rustic's snapshots and in Prometheus.
 
@@ -42,6 +43,7 @@ Rustic runs as an external process: the pinned release is **Rustic 0.11.4**, unm
 | MQTT commands | **off** | Lets MQTT messages start `backup` and `check`; `forget` and `prune` only if listed, and only if enabled on the job. |
 | Home Assistant discovery | **off** | None. |
 | Web interface | **off** | Lets its "Run now" buttons start `backup` and `check`; `forget` and `prune` only if listed, and only if enabled on the job. |
+| Web interface: browsing snapshots | **off** | None on the repository (read-only). Shows file names, sizes, times and owners to whoever can open the page. |
 
 Nothing that deletes anything runs unless you turn it on in the YAML. Destructive options
 found only in a Rustic profile (for example `[forget] prune = true`) are refused at start-up

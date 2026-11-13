@@ -8,7 +8,7 @@ import aiohttp
 import pytest
 from aiohttp import web
 
-from helpers import STATUS, SUMMARY, forget_json, metric, snapshot
+from helpers import STATUS, SUMMARY, forget_json, metric, snapshot, snapshots_json
 from rustic_scheduler.config import ConfigError
 from rustic_scheduler.model import Operation, Outcome
 from rustic_scheduler.web import CSRF_HEADER, CSRF_VALUE, WebServer, create_app
@@ -74,6 +74,7 @@ async def test_page_and_assets_are_served_with_a_strict_policy(site):
         ("/", "text/html"),
         ("/app.js", "text/javascript"),
         ("/app.css", "text/css"),
+        ("/favicon.svg", "image/svg+xml"),
     ):
         async with session.get(path) as response:
             assert response.status == 200 and response.content_type == kind
@@ -87,6 +88,11 @@ async def test_page_and_assets_are_served_with_a_strict_policy(site):
     assert "<style" not in text and "style=" not in text and "http" not in text
     assert text.count("<script") == 1 and '<script src="app.js">' in text
     assert "Using Rustic directly" in text and "has not tested a Glacier" in text
+    assert '<link rel="icon" type="image/svg+xml" href="favicon.svg">' in text
+    # One tab per section, each with its panel.
+    for tab in ("jobs", "snapshots", "history", "manual"):
+        assert f'id="tab-{tab}" aria-controls="panel-{tab}"' in text
+        assert f'id="panel-{tab}" role="tabpanel"' in text
 
 
 async def test_the_page_script_never_builds_html_from_data(site):
@@ -275,7 +281,7 @@ async def test_password_protects_every_route(site, sandbox):
     secret.write_text("correct horse\n")
     engine, session = await site(password_file=str(secret), username="me")
 
-    for path in ("/", "/app.js", "/api/v1/overview"):
+    for path in ("/", "/app.js", "/favicon.svg", "/api/v1/overview", "/api/v1/jobs/docs/snapshots"):
         async with session.get(path) as response:
             assert response.status == 401 and "Basic" in response.headers["WWW-Authenticate"]
     for wrong in (
@@ -336,6 +342,239 @@ async def test_manual_instructions_match_the_job_and_hide_secret_values(site, sa
     assert "hunter2-xyz" not in str(data) and "FAKE_RUSTIC" not in str(manual["helper"])
 
 
+# ------------------------------------------------- snapshots and their files
+
+OLD, NEW, FOREIGN = "a" * 64, "b" * 64, "c" * 64
+SNAPSHOTS = snapshots_json(
+    snapshot("docs", "2026-01-01T03:00:00+00:00", "a"),
+    snapshot("docs", "2026-01-02T03:00:00+00:00", "b") | {"summary": {}, "tags": ["weekly"]},
+    snapshot("someone-else", "2026-01-03T03:00:00+00:00", "c"),
+)
+TREE = {
+    "nodes": [
+        {
+            "name": "notes <b>.txt",
+            "type": "file",
+            "mode": 0o640,
+            "mtime": "2026-01-01T02:00:00.123456789+01:00",
+            "ctime": "2026-01-01T02:00:01+01:00",
+            "uid": 1000,
+            "gid": 100,
+            "user": "me",
+            "group": "users",
+            "size": 12,
+            "content": ["d" * 64],
+        },
+        {"name": "link", "type": "symlink", "linktarget": "notes", "mode": 0o1000000755, "size": 5},
+        # What Rustic prints for a parent of the backed-up path: no times, no owner.
+        {"name": "archive", "type": "dir", "mode": 0o755, "content": None, "subtree": "e" * 64},
+    ]
+}
+BROWSE = {
+    "backup": {"stdout": [STATUS, SUMMARY]},
+    "snapshots": {"stdout": SNAPSHOTS},
+    "cat": {"stdout": [TREE]},
+}
+
+
+async def fetch(session, path, status=200, headers=SENT) -> dict:
+    async with session.get(path, headers=headers) as response:
+        assert response.status == status, await response.text()
+        return await response.json()
+
+
+async def test_browsing_is_off_unless_enabled(site, sandbox):
+    _, session = await site(plan=BROWSE)
+    assert (await overview(session))["browse"] is False
+    for path in ("/api/v1/jobs/docs/snapshots", f"/api/v1/jobs/docs/snapshots/{OLD}/files"):
+        assert "web.browse.enabled" in (await fetch(session, path, 404))["message"]
+    assert sandbox.journal() == []
+
+
+async def test_snapshots_of_a_job_are_listed_newest_first(site, sandbox):
+    _, session = await site(plan=BROWSE, browse={"enabled": True})
+    assert (await overview(session))["browse"] is True
+    data = await fetch(session, "/api/v1/jobs/docs/snapshots")
+    # Only the job's own snapshots, also when Rustic returns others.
+    assert [s["id"] for s in data["snapshots"]] == [NEW, OLD]
+    assert data["stale"] is False and data["job"] == "docs"
+    old = data["snapshots"][1]
+    assert old["time"] == "2026-01-01T03:00:00+00:00" and old["paths"] == ["/data"]
+    assert old["bytes"] == 4242 and old["hostname"] == "h"
+    # What Rustic did not report is null, not zero.
+    assert data["snapshots"][0] | {"id": 0, "time": 0} == {
+        "id": 0,
+        "time": 0,
+        "hostname": "h",
+        "paths": ["/data"],
+        "tags": ["weekly"],
+        "files": None,
+        "bytes": None,
+        "bytes_added": None,
+    }
+    (entry,) = sandbox.journal()
+    assert entry["argv"][-4:] == ["snapshots", "--json", "--filter-label", "docs"]
+    assert (await fetch(session, "/api/v1/jobs/nope/snapshots", 404))["message"] == "unknown job"
+
+
+async def test_the_snapshot_list_is_kept_until_something_ran_or_refresh(site, sandbox):
+    engine, session = await site(plan=BROWSE, browse={"enabled": True})
+    first = await fetch(session, "/api/v1/jobs/docs/snapshots")
+    assert await fetch(session, "/api/v1/jobs/docs/snapshots") == first
+    assert sandbox.commands() == ["snapshots"]
+    await fetch(session, "/api/v1/jobs/docs/snapshots?refresh=1")
+    assert sandbox.commands() == ["snapshots", "snapshots"]
+    # A finished operation may have added or removed snapshots.
+    engine.trigger("docs", Operation.BACKUP)
+    await engine.wait_idle()
+    await fetch(session, "/api/v1/jobs/docs/snapshots")
+    assert sandbox.commands().count("snapshots") == 3
+    # Looking at snapshots is not an operation: no result, no history, no state.
+    assert [r.operation for r in engine.history] == [Operation.BACKUP]
+    assert (engine.runtimes["docs"].name, Operation.SNAPSHOTS) not in engine.last_results
+
+
+async def test_files_of_a_snapshot_one_directory_at_a_time(site, sandbox):
+    _, session = await site(plan=BROWSE, browse={"enabled": True})
+    url = f"/api/v1/jobs/docs/snapshots/{OLD}/files"
+    data = await fetch(session, f"{url}?path=/data//sub%20dir/")
+    assert data["path"] == "/data/sub dir" and data["total"] == 3 and not data["truncated"]
+    assert [e["name"] for e in data["entries"]] == ["archive", "link", "notes <b>.txt"]
+    folder, link, notes = data["entries"]
+    assert notes == {
+        "name": "notes <b>.txt",
+        "type": "file",
+        "size": 12,
+        "modified": "2026-01-01T02:00:00.123456789+01:00",
+        "changed": "2026-01-01T02:00:01+01:00",
+        "permissions": 0o640,
+        "user": "me",
+        "group": "users",
+        "uid": 1000,
+        "gid": 100,
+        "link_target": None,
+    }
+    assert link["link_target"] == "notes" and link["permissions"] == 0o755
+    assert link["size"] is None  # not a content size
+    assert folder["type"] == "dir" and folder["modified"] is None and folder["uid"] is None
+    # One argument, in the job's repository, after the scope was checked with `snapshots`.
+    assert sandbox.commands() == ["snapshots", "cat"]
+    argv = sandbox.journal()[-1]["argv"]
+    assert argv[-3:] == ["cat", "tree", f"{OLD}:/data/sub dir"]
+    assert argv[:2] == ["-P", f"{sandbox.profiles}/repo.toml"]
+
+    # A snapshot does not change: the same directory is not asked for twice.
+    assert await fetch(session, f"{url}?path=/data/sub%20dir") == data
+    assert sandbox.commands() == ["snapshots", "cat"]
+    assert (await fetch(session, url))["path"] == "/"
+    assert sandbox.journal()[-1]["argv"][-1] == f"{OLD}:/"
+
+
+async def test_a_large_directory_is_truncated(site):
+    _, session = await site(plan=BROWSE, browse={"enabled": True, "max_entries": 2})
+    data = await fetch(session, f"/api/v1/jobs/docs/snapshots/{OLD}/files")
+    assert data["total"] == 3 and data["truncated"] is True
+    assert [e["name"] for e in data["entries"]] == ["archive", "link"]
+
+
+@pytest.mark.parametrize(
+    ("target", "status", "message"),
+    [
+        (f"{FOREIGN}/files", 404, "not one of this job's snapshots"),  # another job's
+        (f"{'f' * 64}/files", 404, "not one of this job's snapshots"),
+        ("latest/files", 400, "full id"),
+        (f"{OLD[:8]}/files", 400, "full id"),
+        (f"{OLD}/files?path=/data/../etc", 400, "must not contain"),
+        (f"{OLD}/files?path=/data/%00", 400, "invalid path"),
+    ],
+)
+async def test_only_the_jobs_own_snapshots_and_plain_paths(site, sandbox, target, status, message):
+    _, session = await site(plan=BROWSE, browse={"enabled": True})
+    data = await fetch(session, f"/api/v1/jobs/docs/snapshots/{target}", status)
+    assert message in data["message"]
+    assert "cat" not in sandbox.commands()
+
+
+@pytest.mark.parametrize(
+    "headers", [{}, {CSRF_HEADER: "other"}, SENT | {"Origin": "http://evil.example"}]
+)
+async def test_another_site_cannot_make_the_scheduler_run_rustic(site, sandbox, headers):
+    _, session = await site(plan=BROWSE, browse={"enabled": True})
+    for path in ("/api/v1/jobs/docs/snapshots", f"/api/v1/jobs/docs/snapshots/{OLD}/files"):
+        await fetch(session, path, 403, headers=headers)
+    assert sandbox.journal() == []
+
+
+async def test_a_busy_repository_is_not_queued_behind(site, sandbox, monkeypatch):
+    monkeypatch.setattr("rustic_scheduler.browse.LOCK_WAIT", 0.05)
+    engine, session = await site(plan=BROWSE, browse={"enabled": True})
+    files = f"/api/v1/jobs/docs/snapshots/{OLD}/files"
+    lock = engine.runtimes["docs"].lock_key
+    async with engine.locks.hold(lock, 1):
+        for path in ("/api/v1/jobs/docs/snapshots", files):
+            assert "in use" in (await fetch(session, path, 409))["message"]
+    assert sandbox.journal() == []
+
+    listed = await fetch(session, "/api/v1/jobs/docs/snapshots")
+    seen = await fetch(session, files)
+    async with engine.locks.hold(lock, 1):
+        # What is already known is still shown, and says that it may be out of date.
+        stale = await fetch(session, "/api/v1/jobs/docs/snapshots?refresh=1")
+        assert stale == listed | {"stale": True}
+        assert await fetch(session, files) == seen
+        assert "in use" in (await fetch(session, f"{files}?path=/data", 409))["message"]
+    assert sandbox.commands() == ["snapshots", "cat"]
+
+
+async def test_rustic_errors_are_reported_and_secrets_masked(site, sandbox):
+    sandbox.write_plan({})
+    _, session = await site(
+        browse={"enabled": True},
+        plan=BROWSE
+        | {
+            "cat": [
+                # The shape of Rustic 0.11.4's error report.
+                {
+                    "exit": 1,
+                    "stderr": [
+                        "error: `rustic_core` experienced an error related to `internal "
+                        "operations`.",
+                        "",
+                        "Message:",
+                        "Node `nope` not found in tree.",
+                        "",
+                        "Some additional details ...",
+                    ],
+                },
+                {"exit": 1, "stderr": ["error: backend refused password=hunter2-xyz"]},
+                {"stdout": "not json"},
+                {"stdout": [{"nodes": [{"type": "file"}]}]},
+            ]
+        },
+    )
+    url = f"/api/v1/jobs/docs/snapshots/{OLD}/files?path=/"
+    missing = await fetch(session, f"{url}a", 404)
+    assert missing["message"] == "Node `nope` not found in tree."
+    failed = (await fetch(session, f"{url}b", 502))["message"]
+    assert "backend refused" in failed and "hunter2-xyz" not in failed
+    for name in ("c", "d"):
+        data = await fetch(session, f"{url}{name}", 502)
+        assert data["message"] == "unreadable output from `rustic cat tree`"
+    # A failure is not remembered as a listing.
+    assert sandbox.commands().count("cat") == 4
+
+    sandbox.write_plan({"snapshots": {"exit": 1, "stderr": ["error: no repository"]}})
+    data = await fetch(session, "/api/v1/jobs/docs/snapshots?refresh=1", 502)
+    assert "no repository" in data["message"]
+
+
+async def test_nothing_is_listed_during_shutdown(site, sandbox):
+    engine, session = await site(plan=BROWSE, browse={"enabled": True})
+    await engine.shutdown()
+    assert "shutting down" in (await fetch(session, "/api/v1/jobs/docs/snapshots", 503))["message"]
+    assert sandbox.journal() == []
+
+
 # ------------------------------------------------------------ configuration
 
 
@@ -344,6 +583,9 @@ def test_web_configuration(sandbox):
     config = sandbox.config(web={"enabled": True})
     assert config.web.port == 9301 and config.web.operations == ["backup", "check"]
     assert config.web.password_file is None and config.web.history_size == 50
+    assert config.web.browse.enabled is False and config.web.browse.max_entries == 5000
+    browse = sandbox.config(web={"enabled": True, "browse": {"enabled": True, "timeout": "5m"}})
+    assert browse.web.browse.enabled and browse.web.browse.timeout.total_seconds() == 300
 
     # check with nothing to start it is fine once the page may start it ...
     sandbox.config({"docs": JOB | {"check": {"enabled": True}}}, web={"enabled": True})
@@ -363,6 +605,10 @@ def test_web_configuration(sandbox):
         ({"enabled": True, "username": "a:b"}, "must not contain ':'"),
         ({"enabled": True, "history_size": 0}, "web.history_size"),
         ({"enabled": True, "password": "inline"}, "web.password: unknown setting"),
+        ({"enabled": True, "browse": {"max_entries": 0}}, "web.browse.max_entries"),
+        ({"enabled": True, "browse": {"timeout": "0s"}}, "web.browse"),
+        ({"enabled": True, "browse": {"paths": ["/"]}}, "web.browse.paths: unknown setting"),
+        ({"enabled": True, "browse": True}, "web.browse"),
     ],
 )
 def test_invalid_web_configuration(sandbox, section, problem):

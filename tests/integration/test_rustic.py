@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import shlex
 import subprocess
 from pathlib import Path
@@ -14,6 +15,7 @@ from helpers import metric
 from rustic_scheduler import SUPPORTED_RUSTIC_VERSION
 from rustic_scheduler.app import prepare, rustic_version
 from rustic_scheduler.config import ConfigError
+from rustic_scheduler.engine import parse_time
 from rustic_scheduler.model import Operation, Outcome, Reason, Trigger
 from rustic_scheduler.web import CSRF_HEADER, CSRF_VALUE, create_app
 
@@ -514,3 +516,76 @@ async def test_web_interface_starts_real_runs_and_its_manual_commands_work(real,
     assert not target.exists() or list(target.iterdir()) == []
     rustic("restore", f"{snap['id']}:{real.source}", str(target))
     assert (target / "a.txt").read_text() == "alpha\n"
+
+
+async def test_web_interface_lists_real_snapshots_and_their_files(real, short_tmp):
+    """`rustic snapshots --json` and `rustic cat tree` print what the file browser reads."""
+    (real.source / "sub dir").mkdir()
+    (real.source / "sub dir" / "c.txt").write_text("gamma\n")
+    (real.source / "link").symlink_to("a.txt")
+    os.chmod(real.source / "a.txt", 0o640)
+    os.utime(real.source / "a.txt", (1_700_000_000, 1_700_000_000))
+    config = real.config(
+        {"docs": real.job(), "other": real.job(label="other")},
+        web={"enabled": True, "browse": {"enabled": True}},
+    )
+    engine = await real.engine(config)
+    for job in ("docs", "other", "docs"):
+        engine.trigger(job, Operation.BACKUP)
+        await engine.wait_idle()
+    runner = web.AppRunner(create_app(engine, config.web, SUPPORTED_RUSTIC_VERSION))
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]
+    sent = {CSRF_HEADER: CSRF_VALUE}
+
+    async def get(url: str, status: int = 200, **params: str) -> dict:
+        async with session.get(url, headers=sent, params=params) as response:
+            assert response.status == status, await response.text()
+            return await response.json()
+
+    try:
+        async with aiohttp.ClientSession(base_url=f"http://127.0.0.1:{port}") as session:
+            listed = (await get("/api/v1/jobs/docs/snapshots"))["snapshots"]
+            foreign = (await get("/api/v1/jobs/other/snapshots"))["snapshots"]
+            files = f"/api/v1/jobs/docs/snapshots/{listed[0]['id']}/files"
+            root = await get(files)
+            top = await get(files, path=str(real.source))
+            sub = await get(files, path=f"{real.source}/sub dir")
+            missing = await get(files, 404, path=f"{real.source}/nope")
+            not_a_dir = await get(files, 404, path=f"{real.source}/a.txt")
+            # The same repository, but not this job's snapshot.
+            await get(f"/api/v1/jobs/docs/snapshots/{foreign[0]['id']}/files", 404)
+    finally:
+        await runner.cleanup()
+
+    # Newest first, only the job's own, with the totals Rustic recorded.
+    assert [s["id"] for s in listed] == [s["id"] for s in reversed(real.snapshots("docs"))]
+    assert len(listed) == 2 and len(foreign) == 1
+    newest = listed[0]
+    assert newest["hostname"] == "testhost" and newest["paths"] == [str(real.source)]
+    assert newest["files"] == 4 and newest["bytes"] == 6 + 5000 + 6 + 5
+    assert newest["bytes_added"] is not None
+
+    # The root holds the first component of the absolute source path, without metadata.
+    assert [e["name"] for e in root["entries"]] == [real.source.parts[1]]
+    assert root["entries"][0]["type"] == "dir" and root["entries"][0]["modified"] is None
+
+    assert [(e["name"], e["type"]) for e in top["entries"]] == [
+        ("sub dir", "dir"),
+        ("a.txt", "file"),
+        ("b.txt", "file"),
+        ("link", "symlink"),
+    ]
+    folder, a, b, link = top["entries"]
+    assert (a["size"], b["size"], folder["size"], link["size"]) == (6, 5000, None, None)
+    assert a["permissions"] == 0o640 and folder["permissions"] == 0o755
+    assert parse_time(a["modified"]).timestamp() == 1_700_000_000
+    assert a["uid"] == os.getuid() and link["link_target"] == "a.txt"
+    assert [(e["name"], e["size"]) for e in sub["entries"]] == [("c.txt", 6)]
+    assert "not found in tree" in missing["message"]
+    assert "not a directory" in not_a_dir["message"]
+    # Looking is not an operation, and nothing was changed in the repository.
+    assert [r.operation for r in engine.history] == [Operation.BACKUP] * 3
+    assert len(real.snapshots()) == 3 and real.rustic("check").returncode == 0
