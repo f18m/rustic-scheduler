@@ -61,6 +61,7 @@ Use `rustic-scheduler show-command JOB [OPERATION]` to see the exact command.
 | forget | `forget --json --filter-label <label>`, `--filter-host` if set, one `--keep-*` per entry of `forget.keep`, `--prune` if `forget.prune`, `forget.extra_args`; `--dry-run` for the preview |
 | prune | `prune`, `prune.extra_args`; `--dry-run` if `prune.dry_run` |
 | check | `--json-progress`, `--progress-interval`, `check`, `--read-data` and `--read-data-subset` if set, `check.extra_args` |
+| web interface, Snapshots tab (only with `web.browse.enabled`) | the `snapshots` command above, and `cat tree <snapshot id>:<path>` for one directory. Both are read-only. |
 
 Environment: the Rustic process inherits the scheduler's environment, then `rustic.env`, then
 the job's `env`. The scheduler adds one variable, `RUSTIC_PROMETHEUS=<pushgateway.url>`, when
@@ -139,6 +140,13 @@ backup is `failed`, although the other snapshots were saved.
 
 **Snapshots** (`snapshots --json`): a list of groups, each with `snapshots`. The scheduler
 uses `time`, `label`, `hostname`, `id` and `summary.total_bytes_processed`.
+
+**Files of a snapshot** (`cat tree <id>:<path>`, web interface only): `{"nodes": [...]}`, one
+node per entry of that directory. The scheduler uses `name`, `type` (`file`, `dir`,
+`symlink`, ...), `size` (files), `mtime`, `ctime`, the permission bits of `mode`, `user`,
+`group`, `uid`, `gid` and `linktarget`. `ls --json` is not used because in Rustic 0.11.4 it
+prints names only. The web interface's snapshot list also uses `paths`, `tags` and, from
+`summary`, `total_files_processed` and `data_added_packed`.
 
 **Forget** (`forget --json`): a list of groups, each with `items` holding `snapshot`, `keep`
 and `reasons`.

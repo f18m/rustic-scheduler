@@ -52,6 +52,9 @@ The optional browser interface. See [web.md](web.md).
 | `username` | `admin` | User name for HTTP Basic authentication. Used only with `password_file`. |
 | `password_file` | none | File holding the password. Unset: no authentication. Read at each request. |
 | `history_size` | `50` | Finished and skipped runs kept in memory for the history table (1 to 1000). |
+| `browse.enabled` | `false` | Show the Snapshots tab: each job's snapshots and the files in them (names, sizes, times, owners; read-only). Visible to everyone who can open the page. See [web.md](web.md#snapshots). |
+| `browse.timeout` | `60s` | Time limit for one listing (a Rustic process). A listing holds the repository lock, so a run that becomes due waits at most this long for it. |
+| `browse.max_entries` | `5000` | Entries shown for one directory (1 to 100000); a larger directory is shown truncated. |
 
 ## `pushgateway`
 

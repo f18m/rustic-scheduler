@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>rustic-scheduler</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -13,17 +14,68 @@
     <p id="summary" class="muted">Loading…</p>
   </header>
   <p id="notice" role="status" hidden></p>
+  <nav id="tabs" role="tablist" aria-label="Sections">
+    <button type="button" role="tab" id="tab-jobs" aria-controls="panel-jobs">Jobs</button>
+    <button type="button" role="tab" id="tab-snapshots" aria-controls="panel-snapshots">Snapshots</button>
+    <button type="button" role="tab" id="tab-history" aria-controls="panel-history">Recent runs</button>
+    <button type="button" role="tab" id="tab-manual" aria-controls="panel-manual">Using Rustic directly</button>
+  </nav>
   <main>
-    <section aria-labelledby="jobs-title">
-      <h2 id="jobs-title">Jobs</h2>
+    <section id="panel-jobs" role="tabpanel" aria-labelledby="tab-jobs">
       <div id="jobs"></div>
     </section>
 
-    <section aria-labelledby="history-title">
-      <h2 id="history-title">Recent runs</h2>
+    <section id="panel-snapshots" role="tabpanel" aria-labelledby="tab-snapshots">
+      <p id="browse-off" class="muted" hidden>
+        Browsing snapshots is off. Set <code>web.browse.enabled: true</code> in the
+        scheduler's configuration to list each job's snapshots and their files here. It
+        shows file names to everyone who can open this page.
+      </p>
+      <div id="browse" hidden>
+        <div class="toolbar">
+          <label for="browse-job">Job</label>
+          <select id="browse-job"></select>
+          <button type="button" id="browse-refresh" class="plain">Refresh</button>
+          <span id="browse-note" class="small" role="status"></span>
+        </div>
+        <div class="scroll">
+          <table id="snapshots" class="boxed">
+            <thead>
+              <tr>
+                <th>Taken</th><th>Id</th><th>Host</th><th>Paths</th>
+                <th class="num">Files</th><th class="num">Size</th><th class="num">Added</th><th>Tags</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div id="files" hidden>
+          <h3 id="files-title"></h3>
+          <div id="crumbs" class="crumbs"></div>
+          <p id="files-note" class="small" role="status"></p>
+          <div class="scroll">
+            <table id="entries" class="boxed">
+              <thead>
+                <tr>
+                  <th>Name</th><th class="num">Size</th><th>Modified</th>
+                  <th>Permissions</th><th>Owner</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="small">
+            Rustic records when a file was last modified, not when it was created. This is
+            a listing only: to get files back, see “Using Rustic directly”.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-history" role="tabpanel" aria-labelledby="tab-history">
       <p id="history-note" class="muted"></p>
       <div class="scroll">
-        <table id="history">
+        <table id="history" class="boxed">
           <thead>
             <tr>
               <th>Finished</th><th>Job</th><th>Operation</th><th>Outcome</th>
@@ -35,8 +87,7 @@
       </div>
     </section>
 
-    <section aria-labelledby="manual-title">
-      <h2 id="manual-title">Using Rustic directly</h2>
+    <section id="panel-manual" role="tabpanel" aria-labelledby="tab-manual">
       <p>
         The repository is an ordinary Rustic repository: you can inspect it and restore from it
         with the <code>rustic</code> command, without the scheduler. The commands below are

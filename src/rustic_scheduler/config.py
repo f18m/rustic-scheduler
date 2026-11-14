@@ -328,6 +328,23 @@ class HttpConfig(_Model):
     max_heartbeat_age: Duration = timedelta(seconds=90)
 
 
+class WebBrowseConfig(_Model):
+    """Listing a job's snapshots and their files from the web interface. Off unless enabled."""
+
+    enabled: bool = False
+    #: One Rustic query (a snapshot list, or one directory of a snapshot) may take this long.
+    #: It holds the repository lock meanwhile, so it also bounds how long a run can be delayed.
+    timeout: Duration = timedelta(seconds=60)
+    #: Entries of one directory sent to the page; a larger directory is shown truncated.
+    max_entries: int = Field(default=5000, ge=1, le=100000)
+
+    @model_validator(mode="after")
+    def _validate(self) -> WebBrowseConfig:
+        if self.timeout.total_seconds() <= 0:
+            raise ValueError("timeout must be longer than zero")
+        return self
+
+
 class WebConfig(_Model):
     """Browser interface on its own port. Off unless enabled."""
 
@@ -342,6 +359,8 @@ class WebConfig(_Model):
     password_file: Path | None = None
     #: Finished and skipped runs kept in memory for the history table.
     history_size: int = Field(default=50, ge=1, le=1000)
+    #: Read-only snapshot and file browser. It shows file names to whoever can open the page.
+    browse: WebBrowseConfig = WebBrowseConfig()
 
     @model_validator(mode="after")
     def _validate(self) -> WebConfig:

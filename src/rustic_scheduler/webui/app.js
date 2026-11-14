@@ -1,5 +1,5 @@
 "use strict";
-// Everything shown comes from /api/v1/overview and is inserted as text, never as HTML.
+// Everything shown comes from the scheduler's JSON routes and is inserted as text, never as HTML.
 
 const POLL_MS = 3000;
 const $ = (id) => document.getElementById(id);
@@ -21,7 +21,8 @@ function el(tag, props, ...children) {
 
 function when(iso) {
   if (!iso) return "–";
-  const date = new Date(iso);
+  // Rustic prints nanoseconds; not every browser parses more than milliseconds.
+  const date = new Date(iso.replace(/(\.\d{3})\d+/, "$1"));
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
 }
 
@@ -220,6 +221,198 @@ function renderManual(data) {
   $("manual").replaceChildren(el("div", { class: "card" }, ...sections));
 }
 
+// ------------------------------------------------------------------ tabs
+
+const TABS = ["jobs", "snapshots", "history", "manual"];
+let activeTab = "";
+
+function showTab(name, focus) {
+  if (!TABS.includes(name)) name = TABS[0];
+  activeTab = name;
+  for (const tab of TABS) {
+    const button = $(`tab-${tab}`);
+    const selected = tab === name;
+    button.setAttribute("aria-selected", String(selected));
+    button.tabIndex = selected ? 0 : -1;
+    $(`panel-${tab}`).hidden = !selected;
+    if (selected && focus) button.focus();
+  }
+  if (location.hash.slice(1) !== name) history.replaceState(null, "", `#${name}`);
+  if (name === "snapshots") openSnapshots();
+}
+
+function setupTabs() {
+  TABS.forEach((tab, index) => {
+    const button = $(`tab-${tab}`);
+    button.addEventListener("click", () => showTab(tab));
+    button.addEventListener("keydown", (event) => {
+      const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
+      if (!step) return;
+      event.preventDefault();
+      showTab(TABS[(index + step + TABS.length) % TABS.length], true);
+    });
+  });
+  window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
+  showTab(location.hash.slice(1));
+}
+
+// ------------------------------------------------- snapshots and their files
+
+const SENT = { "X-Requested-With": "rustic-scheduler" };
+const browse = { enabled: false, jobs: "", job: null, loaded: null, snapshot: null, request: 0 };
+
+async function ask(url) {
+  const response = await fetch(url, { cache: "no-store", headers: SENT });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.message || `HTTP ${response.status}`);
+  return body;
+}
+
+function note(id, text, error) {
+  const box = $(id);
+  box.textContent = text;
+  box.className = error ? "small error" : "small";
+}
+
+function renderBrowse(data) {
+  browse.enabled = data.browse;
+  $("browse-off").hidden = data.browse;
+  $("browse").hidden = !data.browse;
+  const names = data.jobs.map((job) => job.name);
+  if (JSON.stringify(names) !== browse.jobs) {
+    browse.jobs = JSON.stringify(names);
+    $("browse-job").replaceChildren(...names.map((name) => el("option", { value: name, text: name })));
+    if (names.includes(browse.job)) $("browse-job").value = browse.job;
+    else browse.job = names[0] || null;
+  }
+  if (activeTab === "snapshots") openSnapshots();
+}
+
+// Rustic is asked when the tab is opened, a job is chosen or "Refresh" is pressed,
+// not on every poll.
+function openSnapshots() {
+  if (browse.enabled && browse.job && browse.loaded !== browse.job) loadSnapshots(false);
+}
+
+async function loadSnapshots(refresh) {
+  const job = browse.job;
+  const request = ++browse.request;
+  browse.loaded = job;
+  browse.snapshot = null;
+  $("files").hidden = true;
+  $("snapshots").tBodies[0].replaceChildren();
+  note("browse-note", "Asking Rustic for the snapshots…");
+  let data;
+  try {
+    data = await ask(`api/v1/jobs/${encodeURIComponent(job)}/snapshots${refresh ? "?refresh=1" : ""}`);
+  } catch (error) {
+    if (request === browse.request) note("browse-note", `The snapshots could not be listed: ${error.message}`, true);
+    return;
+  }
+  if (request !== browse.request) return;
+  const rows = data.snapshots.map((snapshot) => {
+    const open = el("button", { type: "button", class: "link", text: when(snapshot.time), title: "List the files of this snapshot" });
+    const start = snapshot.paths.length === 1 ? snapshot.paths[0] : "/";
+    const row = el("tr", null,
+      el("td", { class: "nowrap" }, open),
+      el("td", { class: "mono", text: snapshot.id.slice(0, 8), title: snapshot.id }),
+      el("td", { text: snapshot.hostname || "–" }),
+      el("td", { class: "wrap", text: snapshot.paths.join(", ") }),
+      el("td", { class: "num", text: snapshot.files === null ? "–" : snapshot.files.toLocaleString() }),
+      el("td", { class: "num", text: bytes(snapshot.bytes) || "–" }),
+      el("td", { class: "num", text: bytes(snapshot.bytes_added) || "–" }),
+      el("td", { class: "wrap", text: snapshot.tags.join(", ") })
+    );
+    open.addEventListener("click", () => {
+      for (const other of $("snapshots").tBodies[0].rows) other.classList.remove("selected");
+      row.classList.add("selected");
+      browse.snapshot = snapshot;
+      loadFiles(start);
+    });
+    return row;
+  });
+  if (!rows.length) rows.push(el("tr", null, el("td", { colSpan: 8, class: "small", text: "This job has no snapshot yet." })));
+  $("snapshots").tBodies[0].replaceChildren(...rows);
+  const count = `${data.snapshots.length} snapshot${data.snapshots.length === 1 ? "" : "s"}, listed ${when(data.fetched_at)}.`;
+  note("browse-note", data.stale
+    ? `${count} The repository is in use, so this list could not be renewed and may be out of date.`
+    : `${count} Choose one to see its files.`, data.stale);
+}
+
+function permissions(entry) {
+  if (entry.permissions === null) return "–";
+  const kind = { dir: "d", symlink: "l", file: "-" }[entry.type] || "?";
+  let text = "";
+  for (let bit = 8; bit >= 0; bit--) text += (entry.permissions >> bit) & 1 ? "rwx"[(8 - bit) % 3] : "-";
+  return kind + text;
+}
+
+function owner(entry) {
+  const user = entry.user || (entry.uid === null ? null : String(entry.uid));
+  const group = entry.group || (entry.gid === null ? null : String(entry.gid));
+  return user === null && group === null ? "–" : `${user ?? "?"}:${group ?? "?"}`;
+}
+
+function crumbs(path) {
+  const parts = path.split("/").filter(Boolean);
+  const nodes = [];
+  const add = (label, target, last) => {
+    if (last) { nodes.push(el("strong", { text: label })); return; }
+    const button = el("button", { type: "button", class: "link", text: label });
+    button.addEventListener("click", () => loadFiles(target));
+    nodes.push(button);
+  };
+  add("/", "/", parts.length === 0);
+  parts.forEach((part, index) => {
+    if (index) nodes.push(el("span", { text: "/" }));
+    add(part, "/" + parts.slice(0, index + 1).join("/"), index === parts.length - 1);
+  });
+  $("crumbs").replaceChildren(...nodes);
+}
+
+async function loadFiles(path) {
+  const snapshot = browse.snapshot;
+  const request = ++browse.request;
+  $("files").hidden = false;
+  $("files-title").textContent = `Files in the snapshot of ${when(snapshot.time)} (${snapshot.id.slice(0, 8)})`;
+  note("files-note", "Asking Rustic for this directory…");
+  let data;
+  try {
+    data = await ask(
+      `api/v1/jobs/${encodeURIComponent(browse.job)}/snapshots/${snapshot.id}/files?path=${encodeURIComponent(path)}`);
+  } catch (error) {
+    if (request === browse.request) note("files-note", `${path} could not be listed: ${error.message}`, true);
+    return;
+  }
+  if (request !== browse.request) return;
+  crumbs(data.path);
+  const rows = data.entries.map((entry) => {
+    const name = el("td", { class: "wrap" });
+    if (entry.type === "dir") {
+      const open = el("button", { type: "button", class: "link", text: `${entry.name}/` });
+      open.addEventListener("click", () => loadFiles(`${data.path === "/" ? "" : data.path}/${entry.name}`));
+      name.append(open);
+    } else {
+      name.textContent = entry.link_target ? `${entry.name} → ${entry.link_target}` : entry.name;
+    }
+    return el("tr", null,
+      name,
+      el("td", { class: "num", text: bytes(entry.size) || "–" }),
+      el("td", { class: "nowrap", text: when(entry.modified) }),
+      el("td", { class: "mono", text: permissions(entry) }),
+      el("td", { class: "nowrap", text: owner(entry) })
+    );
+  });
+  if (!rows.length) rows.push(el("tr", null, el("td", { colSpan: 5, class: "small", text: "This directory is empty." })));
+  $("entries").tBodies[0].replaceChildren(...rows);
+  note("files-note", data.truncated
+    ? `Showing the first ${data.entries.length.toLocaleString()} of ${data.total.toLocaleString()} entries (web.browse.max_entries).`
+    : `${data.total.toLocaleString()} ${data.total === 1 ? "entry" : "entries"}.`);
+}
+
+$("browse-job").addEventListener("change", () => { browse.job = $("browse-job").value; loadSnapshots(false); });
+$("browse-refresh").addEventListener("click", () => { if (browse.job) loadSnapshots(true); });
+
 async function refresh() {
   try {
     const response = await fetch("api/v1/overview", { cache: "no-store" });
@@ -233,11 +426,13 @@ async function refresh() {
     renderJobs(data);
     renderHistory(data);
     renderManual(data);
+    renderBrowse(data);
   } catch (error) {
     failures += 1;
     if (failures >= 2) notify(`Cannot reach the scheduler (${error.message}). What is shown may be out of date.`, "error stale");
   }
 }
 
+setupTabs();
 refresh();
 setInterval(refresh, POLL_MS);

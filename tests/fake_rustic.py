@@ -15,7 +15,17 @@ import signal
 import sys
 import time
 
-COMMANDS = {"backup", "snapshots", "forget", "prune", "check", "show-config", "init", "restore"}
+COMMANDS = {
+    "backup",
+    "snapshots",
+    "forget",
+    "prune",
+    "check",
+    "show-config",
+    "init",
+    "restore",
+    "cat",
+}
 
 
 def main() -> int:
