@@ -586,6 +586,17 @@ def test_web_configuration(sandbox):
     assert config.web.browse.enabled is False and config.web.browse.max_entries == 5000
     browse = sandbox.config(web={"enabled": True, "browse": {"enabled": True, "timeout": "5m"}})
     assert browse.web.browse.enabled and browse.web.browse.timeout.total_seconds() == 300
+    assert config.web.public_url is None
+    assert str(sandbox.config(web={"public_url": "https://example.com:8443/"}).web.public_url) == (
+        "https://example.com:8443/"
+    )
+    # The page's relative paths resolve against a directory, so the slash is added.
+    for written, published in (
+        ("https://example.com", "https://example.com/"),
+        ("https://example.com/backup", "https://example.com/backup/"),
+        ("https://example.com/a/b/", "https://example.com/a/b/"),
+    ):
+        assert str(sandbox.config(web={"public_url": written}).web.public_url) == published
 
     # check with nothing to start it is fine once the page may start it ...
     sandbox.config({"docs": JOB | {"check": {"enabled": True}}}, web={"enabled": True})
@@ -609,6 +620,11 @@ def test_web_configuration(sandbox):
         ({"enabled": True, "browse": {"timeout": "0s"}}, "web.browse"),
         ({"enabled": True, "browse": {"paths": ["/"]}}, "web.browse.paths: unknown setting"),
         ({"enabled": True, "browse": True}, "web.browse"),
+        ({"public_url": "not-a-url"}, "web.public_url"),
+        ({"public_url": "ftp://example.com/"}, "web.public_url"),
+        ({"public_url": "https://user:password@example.com/"}, "web.public_url"),
+        ({"public_url": "https://example.com/?token=secret"}, "web.public_url"),
+        ({"public_url": "https://example.com/#fragment"}, "web.public_url"),
     ],
 )
 def test_invalid_web_configuration(sandbox, section, problem):

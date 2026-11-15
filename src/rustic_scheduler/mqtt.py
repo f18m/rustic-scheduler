@@ -149,7 +149,7 @@ class MqttPublisher:
                     self.metrics.mqtt_connected.set(1)
                     delay = 1.0
                     for topic, payload in self.birth:
-                        await client.publish(topic, payload, qos=1, retain=True)
+                        await client.publish(topic, REDACTOR(payload), qos=1, retain=True)
                     await client.publish(status, "online", qos=1, retain=True)
                     for topic_filter in self.subscriptions:
                         await client.subscribe(topic_filter, qos=1)

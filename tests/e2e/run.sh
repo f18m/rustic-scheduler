@@ -66,7 +66,8 @@ listing="$(sched rustic-scheduler rustic demo -- ls latest 2>/dev/null)"
 for f in readable.txt root-only.txt private/nested.txt; do
   echo "$listing" | grep -q "$f" || fail "$f is missing from the snapshot"
 done
-sched rustic-scheduler rustic demo -- snapshots --json 2>/dev/null | grep -q '"hostname": "e2e-host"' || fail "snapshot host"
+snapshots="$(sched rustic-scheduler rustic demo -- snapshots --json)" || fail "listing snapshots"
+grep -Fq '"hostname": "e2e-host"' <<< "$snapshots" || fail "snapshot host"
 
 step "scheduler metrics"
 metrics="$(sched python -c 'import urllib.request;print(urllib.request.urlopen("http://127.0.0.1:9300/metrics").read().decode())')"

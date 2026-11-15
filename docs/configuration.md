@@ -48,6 +48,7 @@ The optional browser interface. See [web.md](web.md).
 |---|---|---|
 | `enabled` | `false` | Serve the web interface. |
 | `host`, `port` | `0.0.0.0`, `9301` | Listen address. The port must differ from `http.port`, which stays read-only. |
+| `public_url` | none | External HTTP(S) URL of the web interface, included in Home Assistant MQTT discovery when the web interface is enabled. No credentials, query or fragment. A missing trailing `/` is added. The whole URL, path included, is readable by every client of the broker. |
 | `operations` | `[backup, check]` | Operations the page may start: `backup`, `snapshots`, `check`, `forget`, `prune`. `forget` and `prune` delete data and must be listed explicitly; they must also be enabled on the job. `[]` makes the page read-only. |
 | `username` | `admin` | User name for HTTP Basic authentication. Used only with `password_file`. |
 | `password_file` | none | File holding the password. Unset: no authentication. Read at each request. |
