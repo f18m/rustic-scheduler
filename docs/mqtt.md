@@ -52,8 +52,8 @@ a crash. While `<prefix>/status` is `offline` the retained state is not being ma
 
 `event` is `queued`, `started`, `finished`, `skipped` or `rejected`. `finished` and `skipped`
 carry the full result (below). `rejected` answers a [command](#commands) that was refused and
-carries the reason in `detail`. `trigger` is `schedule`, `catch_up`, `manual`, `mqtt`, `web` or
-`after_backup`.
+carries the reason in `detail`. `trigger` is `schedule`, `catch_up`, `startup`, `manual`, `mqtt`,
+`web` or `after_backup`. `startup` identifies a refresh of legacy snapshot telemetry.
 
 ### Progress
 

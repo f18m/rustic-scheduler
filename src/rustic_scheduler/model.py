@@ -37,6 +37,7 @@ class Outcome(StrEnum):
 class Trigger(StrEnum):
     SCHEDULE = "schedule"
     CATCH_UP = "catch_up"
+    STARTUP = "startup"
     MANUAL = "manual"
     MQTT = "mqtt"
     WEB = "web"

@@ -63,7 +63,14 @@ unchanged ones included, so they are the snapshot's total size (before deduplica
 compression) and file count, not what the backup added. The scheduler reads them from the
 `snapshots --json` listing it already runs: no extra command and no walk through the
 snapshot. They are also in the MQTT result (`latest_bytes`, `latest_files`), in Home
-Assistant and on the web page. Limits:
+Assistant and on the web page.
+
+When upgrading from a version that saved snapshot telemetry without a file count, enabled
+snapshot telemetry is refreshed once at startup. Until that read succeeds, the restored
+count remains unknown; a failed refresh is reported as a failed snapshot operation. Normal
+collections continue after backups or on the configured schedule.
+
+Limits:
 
 - Only the single newest snapshot is described. A job whose profiles define several
   `[[backup.snapshots]]` writes several snapshots per run; for the whole run use

@@ -46,7 +46,9 @@ One card per job. Under the job's name:
   the number of snapshots, and when this was last read from the repository. It comes from
   snapshot telemetry ([maintenance.md](maintenance.md#snapshot-telemetry)), so the job needs
   `snapshots: {enabled: true}`; without it the page says so instead of showing a number. A
-  value Rustic did not record is shown as unknown, never as 0.
+  value Rustic did not record is shown as unknown, never as 0. After an upgrade, older
+  saved telemetry may show an unknown file count until its startup refresh succeeds; the
+  Snapshots tab reads the repository independently.
 
 Then one row per operation that is enabled for it:
 
