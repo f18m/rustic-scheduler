@@ -203,6 +203,16 @@ def cmd_status(args: argparse.Namespace) -> int:
     print(f"ready: {state['ready']}   heartbeat: {state['heartbeat']}")
     for name, job in state["jobs"].items():
         print(f"{name} (label {job['label']})")
+        if job.get("description"):
+            print(f"  {job['description']}")
+        snapshots = job.get("snapshots")
+        if snapshots and snapshots["latest_at"]:
+            size, files = snapshots["latest_bytes"], snapshots["latest_files"]
+            print(
+                f"  latest snapshot {snapshots['latest_at']}: "
+                f"{'unknown size' if size is None else f'{size} bytes'}, "
+                f"{'unknown file count' if files is None else f'{files} files'}"
+            )
         for operation, info in job["operations"].items():
             last = info["last_result"] or {}
             outcome = last.get("outcome", "never run")

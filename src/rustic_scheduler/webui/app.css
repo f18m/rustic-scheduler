@@ -65,6 +65,9 @@ code { background: var(--code-bg); padding: 1px 4px; border-radius: 4px; }
 }
 .card-head { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; margin-bottom: 8px; }
 
+.card .description { margin: 0 0 6px; }
+.card .snapshot { margin: 0 0 10px; }
+
 .scroll { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 8px 10px; border-top: 1px solid var(--line); vertical-align: top; }

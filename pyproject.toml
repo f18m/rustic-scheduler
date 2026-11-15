@@ -1,6 +1,6 @@
 [project]
 name = "rustic-scheduler"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Schedules Rustic backups from YAML, with Prometheus, MQTT and Apprise reporting"
 readme = "README.md"
 license = "MIT"
@@ -20,6 +20,8 @@ rustic-scheduler = "rustic_scheduler.cli:main"
 
 [dependency-groups]
 dev = [
+    "hatch-vcs>=0.4",
+    "hatchling>=1.25",
     "mypy>=1.13",
     "pytest>=8.3",
     "pytest-asyncio>=0.25",
@@ -28,8 +30,22 @@ dev = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.25", "hatch-vcs>=0.4"]
 build-backend = "hatchling.build"
+
+# The version is the Git tag: tag 0.4.0 builds 0.4.0, and a commit after it builds
+# 0.4.1.devN+g<commit>. Without Git (the image build), scripts/version.sh computes it
+# outside and passes it in; see docs/operations.md.
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+fallback_version = "0.0.0.dev0"
+
+# Rebuild the installed project when the commit or the tags change, so that
+# `uv run` reports the current version.
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rustic_scheduler"]

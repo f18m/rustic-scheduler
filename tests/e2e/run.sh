@@ -15,7 +15,8 @@ cleanup() { [ "$KEEP" = "--keep" ] || "${COMPOSE[@]}" down -v --remove-orphans >
 trap cleanup EXIT
 
 step "build the image"
-docker build -q -f "$ROOT/docker/Dockerfile" -t "$IMAGE" "$ROOT" >/dev/null
+VERSION="${VERSION:-$("$ROOT/scripts/version.sh")}"
+docker build -q --build-arg VERSION="$VERSION" -f "$ROOT/docker/Dockerfile" -t "$IMAGE" "$ROOT" >/dev/null
 
 # The Prometheus example configuration, unchanged except for a faster interval.
 sed 's/scrape_interval: 30s/scrape_interval: 2s/' "$ROOT/examples/prometheus/prometheus.yml" > prometheus.yml
@@ -55,6 +56,7 @@ sched sh -c 'touch /probe 2>/dev/null' && fail "root filesystem is writable"
 sched sh -c 'cat /data/source/root-only.txt >/dev/null 2>&1' && fail "the scheduler process itself can read root-only files"
 sched sh -c 'grep -q "^CapEff:.0000000000000000" /proc/1/status' || fail "the scheduler has effective capabilities"
 sched rustic-scheduler validate | grep -q "valid" || fail "validate"
+[ "$(sched rustic-scheduler --version)" = "$VERSION" ] || fail "the image reports $(sched rustic-scheduler --version), not $VERSION"
 
 step "manual backup through the control socket"
 sched rustic-scheduler trigger demo --wait | tee /dev/stderr | grep -q "backup succeeded" || fail "backup did not succeed"
@@ -71,6 +73,8 @@ metrics="$(sched python -c 'import urllib.request;print(urllib.request.urlopen("
 echo "$metrics" | grep -q 'rustic_scheduler_operation_last_outcome{backup_job="demo",operation="backup",outcome="succeeded"} 1.0' || fail "backup outcome metric"
 echo "$metrics" | grep -q 'rustic_scheduler_operation_last_outcome{backup_job="demo",operation="check",outcome="succeeded"} 1.0' || fail "check outcome metric"
 echo "$metrics" | grep -q 'rustic_scheduler_snapshots{backup_job="demo"} 1.0' || fail "snapshot telemetry metric"
+echo "$metrics" | grep -q 'rustic_scheduler_snapshot_latest_files{backup_job="demo"} 3.0' || fail "latest snapshot file count metric"
+echo "$metrics" | grep -q "rustic_scheduler_info{rustic_version=\"0.11.4\",version=\"$VERSION\"} 1.0" || fail "version in the info metric"
 echo "$metrics" | grep -q 'rustic_scheduler_pushgateway_push_verified{backup_job="demo"} 1.0' || fail "push verification metric"
 
 step "Prometheus scrapes both endpoints with the example configuration"

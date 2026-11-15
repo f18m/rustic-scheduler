@@ -8,6 +8,7 @@ jobs:
   demo:
     profiles: [repo, options]
     sources: [/data/source]
+    host: e2e-host
     schedule: {days: daily, times: ["03:00"]}
     snapshots: {enabled: true}
     check: {enabled: true, after_backup: true}

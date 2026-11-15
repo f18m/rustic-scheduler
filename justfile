@@ -37,11 +37,15 @@ e2e:
 
 # Build the container image for the local architecture
 build tag="rustic-scheduler:dev":
-    docker build -f docker/Dockerfile -t {{tag}} .
+    docker build --build-arg VERSION="$(./scripts/version.sh)" -f docker/Dockerfile -t {{tag}} .
 
 # Build for both supported architectures (needs a buildx builder with emulation)
 build-multiarch tag="rustic-scheduler:dev":
-    docker buildx build --platform linux/amd64,linux/arm64 -f docker/Dockerfile -t {{tag}} .
+    docker buildx build --build-arg VERSION="$(./scripts/version.sh)" --platform linux/amd64,linux/arm64 -f docker/Dockerfile -t {{tag}} .
+
+# Print the version of this checkout, derived from the Git tags
+version:
+    @./scripts/version.sh
 
 # Validate a configuration file with the local Rustic binary
 validate config="examples/config.yaml":
