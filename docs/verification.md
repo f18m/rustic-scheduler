@@ -155,10 +155,14 @@ detected.
   `latest`, `..` and requests without the page's header refused before Rustic is started.
 - With the scripted stand-in (unit tests): progress of a running backup in the overview;
   bounded, newest-first history including skipped runs, and what it holds after a restart;
+  scheduled and unscheduled operations in the overview;
   `forget` refused unless listed and enabled, and still previewed first; refusal of a second
   request without a recorded skip; requests without the page's header or with a foreign
   `Origin` refused; Basic authentication on every route, password rotation, and an
   unreadable password file failing closed; no secret value in the manual commands.
+- With Node.js and a simulated DOM (unit test, skipped when Node.js is unavailable): the
+  Next runs tab, chronological ordering across timezones, exclusion of unscheduled
+  operations, refresh, empty state and keyboard navigation. This is not a browser test.
 - One manual run of the tabbed page, not part of the test suite, in headless Chrome against
   a local repository made by the real binary: switching tabs, listing two jobs' snapshots,
   opening a snapshot, entering a directory and going back up by the path, a file name
