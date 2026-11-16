@@ -305,6 +305,59 @@ async def test_latest_snapshot_size_and_file_count_cover_unchanged_files(real):
     facts = engine.status()["jobs"]["totals"]["snapshots"]
     assert facts["latest_files"] == 4 and facts["latest_bytes"] == size and facts["count"] == 2
 
+    # State written by older versions had the size but not the file count.
+    state_path = real.state_dir / "state.json"
+    state = json.loads(state_path.read_text())
+    del state["results"]["totals/snapshots"]["data"]["latest_files"]
+    state_path.write_text(json.dumps(state))
+    restarted = await real.engine(real.config({"totals": job}))
+    await restarted.start()
+    assert restarted.status()["jobs"]["totals"]["snapshots"]["latest_files"] is None
+    await restarted.wait_idle()
+    facts = restarted.status()["jobs"]["totals"]["snapshots"]
+    assert facts["latest_files"] == 4 and facts["latest_bytes"] == size
+    assert restarted.last_results[("totals", Operation.SNAPSHOTS)].trigger == Trigger.STARTUP
+    assert (
+        metric(restarted.metrics, "rustic_scheduler_snapshot_latest_files", {"job": "totals"}) == 4
+    )
+    await restarted.shutdown()
+
+
+async def test_legacy_web_telemetry_is_refreshed_to_match_the_snapshot_browser(real):
+    job = real.job(snapshots={"enabled": True})
+    config = real.config({"docs": job}, web={"enabled": True, "browse": {"enabled": True}})
+    engine = await real.engine(config)
+    await run(engine)
+    state_path = real.state_dir / "state.json"
+    state = json.loads(state_path.read_text())
+    del state["results"]["docs/snapshots"]["data"]["latest_files"]
+    state_path.write_text(json.dumps(state))
+    restarted = await real.engine(config)
+    await restarted.start()
+    runner = web.AppRunner(create_app(restarted, config.web, SUPPORTED_RUSTIC_VERSION))
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]
+    try:
+        await restarted.wait_idle()
+        async with aiohttp.ClientSession(base_url=f"http://127.0.0.1:{port}") as session:
+            async with session.get("/api/v1/overview") as response:
+                assert response.status == 200
+                jobs = await response.json()
+            async with session.get(
+                "/api/v1/jobs/docs/snapshots", headers={CSRF_HEADER: CSRF_VALUE}
+            ) as response:
+                assert response.status == 200
+                snapshots = await response.json()
+        latest = jobs["jobs"][0]["snapshots"]
+        newest = snapshots["snapshots"][0]
+        assert latest["latest_files"] == newest["files"] == 2
+        assert latest["latest_bytes"] == newest["bytes"]
+    finally:
+        await runner.cleanup()
+        await restarted.shutdown()
+
 
 async def test_snapshot_telemetry_is_per_job_on_a_shared_repository(real):
     engine = await real.engine(real.config(shared_repo_jobs(real)))

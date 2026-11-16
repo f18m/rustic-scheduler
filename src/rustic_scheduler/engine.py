@@ -352,6 +352,17 @@ class Engine:
         catch_up = asyncio.create_task(self._catch_up(now), name="catch-up")
         self._tasks[catch_up] = ("", Operation.SNAPSHOTS)
         catch_up.add_done_callback(lambda task: self._tasks.pop(task, None))
+        for result in restored:
+            if (
+                result.job in self.runtimes
+                and result.operation == Operation.SNAPSHOTS
+                and result.outcome == Outcome.SUCCEEDED
+                and result.data.get("latest") is not None
+                and "latest_files" not in result.data
+                and self.runtimes[result.job].job.snapshots.enabled
+            ):
+                log.info("job %s: refreshing legacy snapshot telemetry", result.job)
+                self.submit(result.job, Operation.SNAPSHOTS, Trigger.STARTUP)
 
     # ------------------------------------------------------------- scheduling
 

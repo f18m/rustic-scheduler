@@ -402,6 +402,75 @@ async def test_snapshot_telemetry_values(sandbox):
     assert args[args.index("--filter-label") + 1] == "docs"
 
 
+@pytest.mark.parametrize(
+    ("legacy", "enabled", "has_snapshot", "fails", "refresh"),
+    [
+        (True, True, True, False, True),
+        (True, True, True, True, True),
+        (True, False, True, False, False),
+        (True, True, False, False, False),
+        (False, True, True, False, False),
+    ],
+)
+async def test_restart_refreshes_only_legacy_snapshot_telemetry(
+    sandbox, legacy, enabled, has_snapshot, fails, refresh
+):
+    listing = snapshots_json(snapshot("docs", "2026-01-03T10:00:00Z")) if has_snapshot else "[]"
+    sandbox.write_plan({"snapshots": {"stdout": [listing]}})
+    config = sandbox.config({"docs": full_job()})
+    engine = await sandbox.engine(config)
+    await run(engine, operation=Operation.SNAPSHOTS)
+    path = sandbox.state_dir / "state.json"
+    state = json.loads(path.read_text())
+    data = state["results"]["docs/snapshots"]["data"]
+    if legacy:
+        del data["latest_files"]
+    else:
+        data["latest_files"] = None
+    path.write_text(json.dumps(state))
+    if not enabled:
+        config = sandbox.config({"docs": full_job(snapshots={"enabled": False})})
+    if fails:
+        sandbox.write_plan({"snapshots": {"exit": 1, "stderr": ["error: unavailable"]}})
+    restarted = await sandbox.engine(config)
+    await restarted.start()
+    initial = restarted.status()["jobs"]["docs"]["snapshots"]
+    assert initial["latest_files"] is None
+    await restarted.wait_idle()
+    facts = restarted.status()["jobs"]["docs"]["snapshots"]
+    result = restarted.last_results[("docs", Operation.SNAPSHOTS)]
+    assert len(sandbox.journal()) == 1 + int(refresh)
+    if refresh:
+        assert result.trigger == Trigger.STARTUP
+        assert result.outcome == (Outcome.FAILED if fails else Outcome.SUCCEEDED)
+        assert facts["latest_files"] == (None if fails else 17)
+        assert facts["latest_bytes"] == 4242
+        assert metric(
+            restarted.metrics, "rustic_scheduler_snapshot_latest_files", {"job": "docs"}
+        ) == (None if fails else 17)
+    else:
+        assert facts == initial
+    await restarted.shutdown()
+    if refresh and not fails:
+        again = await sandbox.engine(config)
+        await again.start()
+        await again.wait_idle()
+        assert len(sandbox.journal()) == 2
+        assert again.status()["jobs"]["docs"]["snapshots"]["latest_files"] == 17
+        await again.shutdown()
+
+
+async def test_snapshot_telemetry_keeps_a_zero_file_count(sandbox):
+    empty = snapshot("docs", "2026-01-03T10:00:00Z")
+    empty["summary"]["total_files_processed"] = 0
+    sandbox.write_plan({"snapshots": {"stdout": [snapshots_json(empty)]}})
+    engine = await sandbox.engine(sandbox.config({"docs": full_job()}))
+    result = await run(engine, operation=Operation.SNAPSHOTS)
+    assert result.data["latest_files"] == 0
+    assert engine.status()["jobs"]["docs"]["snapshots"]["latest_files"] == 0
+    assert metric(engine.metrics, "rustic_scheduler_snapshot_latest_files", {"job": "docs"}) == 0
+
+
 async def test_empty_scope_reports_zero_snapshots_and_no_timestamp(sandbox):
     sandbox.write_plan({"snapshots": {"stdout": [snapshots_json()]}})
     engine = await sandbox.engine(sandbox.config({"docs": full_job()}))

@@ -60,6 +60,8 @@ skipped.
 
 - Backup with live progress and no MQTT; several sources in one snapshot; sources defined in
   a profile giving one snapshot each.
+- An enabled job refreshes restored pre-file-count snapshot telemetry at startup against a
+  real local Rustic repository; the latest file count and size are then available again.
 - Three real TOML profiles combined: repository from one, tags and globs from another,
   `exclude-if-present` from a third, all effective in the same snapshot; conflict resolution
   by order.
