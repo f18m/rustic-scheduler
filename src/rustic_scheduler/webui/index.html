@@ -18,6 +18,7 @@
     <button type="button" role="tab" id="tab-jobs" aria-controls="panel-jobs">Jobs</button>
     <button type="button" role="tab" id="tab-snapshots" aria-controls="panel-snapshots">Snapshots</button>
     <button type="button" role="tab" id="tab-history" aria-controls="panel-history">Recent runs</button>
+    <button type="button" role="tab" id="tab-next" aria-controls="panel-next">Next runs</button>
     <button type="button" role="tab" id="tab-manual" aria-controls="panel-manual">Using Rustic directly</button>
   </nav>
   <main>
@@ -80,6 +81,20 @@
             <tr>
               <th>Finished</th><th>Job</th><th>Operation</th><th>Outcome</th>
               <th>Trigger</th><th>Duration</th><th>Detail</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="panel-next" role="tabpanel" aria-labelledby="tab-next">
+      <p class="muted">The next scheduled run of each operation, in your browser's local time.</p>
+      <div class="scroll">
+        <table id="next" class="boxed">
+          <thead>
+            <tr>
+              <th>Next run</th><th>Job</th><th>Operation</th><th>Schedule</th>
             </tr>
           </thead>
           <tbody></tbody>

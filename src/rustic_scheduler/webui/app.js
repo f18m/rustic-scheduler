@@ -189,6 +189,21 @@ function renderHistory(data) {
     "long-term history is in Prometheus and in the repository's snapshots.";
 }
 
+function renderNextRuns(data) {
+  const scheduled = data.jobs.flatMap((job) => job.operations
+    .filter((row) => row.next_run)
+    .map((row) => ({ job: job.name, ...row })));
+  scheduled.sort((a, b) => new Date(a.next_run) - new Date(b.next_run));
+  const rows = scheduled.map((row) => el("tr", null,
+    el("td", { class: "nowrap", text: when(row.next_run) }),
+    el("td", { text: row.job }),
+    el("td", { text: row.operation }),
+    el("td", { text: row.schedule })
+  ));
+  if (!rows.length) rows.push(el("tr", null, el("td", { colSpan: 4, class: "small", text: "No operations are scheduled." })));
+  $("next").tBodies[0].replaceChildren(...rows);
+}
+
 function block(title, text) {
   const copy = el("button", { type: "button", class: "plain", text: "Copy" });
   copy.addEventListener("click", async () => {
@@ -241,7 +256,7 @@ function renderManual(data) {
 
 // ------------------------------------------------------------------ tabs
 
-const TABS = ["jobs", "snapshots", "history", "manual"];
+const TABS = ["jobs", "snapshots", "history", "next", "manual"];
 let activeTab = "";
 
 function showTab(name, focus) {
@@ -443,6 +458,7 @@ async function refresh() {
       `Scheduler ${data.version} · Rustic ${data.rustic_version} · ${state} · updated ${new Date().toLocaleTimeString()}`;
     renderJobs(data);
     renderHistory(data);
+    renderNextRuns(data);
     renderManual(data);
     renderBrowse(data);
   } catch (error) {

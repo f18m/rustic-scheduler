@@ -13,7 +13,7 @@ backups on a schedule and tells you, truthfully, what happened.
 - Optional MQTT events, optional [Apprise](https://github.com/caronc/apprise) notifications.
 - Optional MQTT commands to start a backup, check or forget, and optional Home Assistant
   MQTT discovery (sensors and "run" buttons per job).
-- Optional web interface: running operations with progress, recent runs, "Run now" buttons,
+- Optional web interface: running operations with progress, recent and next runs, "Run now" buttons,
   ready-to-copy commands for using Rustic directly and, if enabled, a read-only browser for
   each job's snapshots and the files in them.
 - Optional snapshot telemetry, retention (`forget`), `prune` and `check`.

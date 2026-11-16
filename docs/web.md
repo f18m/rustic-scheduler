@@ -32,10 +32,10 @@ broker can read. It cannot tell a secret path segment from an ordinary one: do n
 URL whose path carries an access token (as some tunnel and share-link services issue), and
 put authentication in `web.password_file` or the reverse proxy instead.
 
-The page has four tabs: **Jobs**, **Snapshots**, **Recent runs** and **Using Rustic
-directly**. The address keeps the open tab (`#jobs`, `#snapshots`, `#history`, `#manual`), so
-a tab can be bookmarked. The header with the scheduler's state, and messages about requests,
-stay visible on every tab.
+The page has five tabs: **Jobs**, **Snapshots**, **Recent runs**, **Next runs** and **Using
+Rustic directly**. The address keeps the open tab (`#jobs`, `#snapshots`, `#history`, `#next`,
+`#manual`), so a tab can be bookmarked. The header with the scheduler's state, and messages
+about requests, stay visible on every tab.
 
 ## Jobs
 
@@ -60,7 +60,7 @@ Then one row per operation that is enabled for it:
   last skipped run, if any.
 - **Run now**, for the operations listed in `web.operations`.
 
-The page refreshes itself every three seconds (jobs and recent runs; not the snapshots).
+The page refreshes itself every three seconds (jobs, recent and next runs; not the snapshots).
 
 ### Starting an operation
 
@@ -125,6 +125,15 @@ This is **not a stored history**. The list lives in memory. After a restart it s
 the last known result of each operation, which is all the state file holds, and grows from
 there. For anything longer use Prometheus (`rustic_scheduler_operation_runs_total`,
 `..._last_run_*`), the run logs in the state directory, and the repository's own snapshots.
+
+## Next runs
+
+The next scheduled occurrence of each job's scheduled operation, earliest first, with its
+job, operation and schedule. Times are displayed in the browser's local timezone; the
+schedule includes its configured timezone. Operations without a schedule, including
+operations run only on request or after a backup, are not listed. A scheduled operation
+is listed even while it is queued or running; the actual run can still be skipped or delayed.
+This is the scheduler's next occurrence per operation, not a calendar of all future runs.
 
 ## Using Rustic directly
 

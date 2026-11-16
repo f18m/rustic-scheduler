@@ -24,7 +24,7 @@ rustic:
 http:
   port: 9300
 
-# Optional browser interface: state, progress, snapshots, recent runs, "Run now" buttons and
+# Optional browser interface: state, progress, snapshots, recent and next runs, "Run now" buttons and
 # commands for using Rustic directly. See docs/web.md before enabling it.
 web:
   enabled: false

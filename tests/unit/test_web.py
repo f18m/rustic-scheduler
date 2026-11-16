@@ -90,7 +90,7 @@ async def test_page_and_assets_are_served_with_a_strict_policy(site):
     assert "Using Rustic directly" in text and "has not tested a Glacier" in text
     assert '<link rel="icon" type="image/svg+xml" href="favicon.svg">' in text
     # One tab per section, each with its panel.
-    for tab in ("jobs", "snapshots", "history", "manual"):
+    for tab in ("jobs", "snapshots", "history", "next", "manual"):
         assert f'id="tab-{tab}" aria-controls="panel-{tab}"' in text
         assert f'id="panel-{tab}" role="tabpanel"' in text
 
@@ -118,6 +118,23 @@ async def test_overview_lists_operations_and_what_may_be_started(site):
     forget = row(data, "forget")
     assert forget["can_run"] is False and forget["destructive"] is True  # not in web.operations
     assert row(data, "check")["state"] == "idle"
+
+
+async def test_overview_includes_only_actual_schedules_as_next_runs(site):
+    engine, session = await site(
+        job={
+            "schedule": {"days": "daily", "times": ["02:00"]},
+            "check": {"enabled": True, "schedule": {"days": "mon", "times": ["03:00"]}},
+            "forget": {"enabled": True, "keep": {"keep-last": 1}},
+        }
+    )
+    engine._build_entries(engine.clock())
+    data = await overview(session)
+    assert row(data, "backup")["next_run"] is not None
+    assert row(data, "backup")["schedule"].startswith("daily at 02:00")
+    assert row(data, "check")["next_run"] is not None
+    assert row(data, "check")["schedule"].startswith("mon at 03:00")
+    assert row(data, "forget")["next_run"] is None
 
 
 async def test_a_running_backup_shows_progress_then_lands_in_history(site):
