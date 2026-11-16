@@ -23,8 +23,9 @@ Rustic runs as an external process: the pinned release is **Rustic 0.11.4**, unm
 
 > **Status.** Everything described here was exercised against the real Rustic 0.11.4 binary,
 > Pushgateway 1.11.4, Prometheus 3.16.0 and Mosquitto 2.1.2 on local, disposable data.
-> **Nothing was run against AWS.** Behaviour of real S3 Glacier storage classes, retrievals,
-> restores and costs is documented from AWS's and Rustic's documentation and is unverified.
+> AWS Glacier Deep Archive storage, restores and `check --read-data` have been verified on a
+> production repository. Behaviour of other AWS-specific features (eventual consistency,
+> throttling, IAM policies, pricing) is documented from AWS's documentation and unverified.
 > See [docs/verification.md](docs/verification.md).
 
 ## What is on by default, and what can delete data

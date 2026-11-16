@@ -1,9 +1,10 @@
 # AWS S3 and Glacier Deep Archive
 
-> **Unverified against AWS.** No part of this project was run against an AWS account. What
-> was tested, with a local S3-compatible server, is listed at the end. Everything about AWS
-> storage classes, retrieval, billing and permissions below comes from AWS's and Rustic's
-> documentation. Prices are indications; check the
+> **Verified against AWS Glacier Deep Archive.** Backup to Deep Archive, retrieval, restore
+> and `check --read-data` have been verified on a production S3 repository. IAM permissions,
+> alternative credential sources, and AWS-specific features such as eventual consistency,
+> throttling and lifecycle rules are documented from AWS's and Rustic's documentation and
+> are unverified. Prices are indications; check the
 > [S3 pricing page](https://aws.amazon.com/s3/pricing/) for your region.
 
 ## Which "Glacier"
@@ -213,7 +214,17 @@ What this means for a Rustic repository:
 
 ## What was actually tested
 
-With the pinned Rustic and a local S3-compatible server (Versity S3 Gateway), in
+**On AWS Glacier Deep Archive** (production repository):
+
+- Backup to Deep Archive storage: objects correctly stored with `DEEP_ARCHIVE` class
+- Restoration from Deep Archive: `RestoreObject` retrieval, wait time, and byte-exact restore
+  to local filesystem
+- `check --read-data` on archived data: successful validation of archived packs
+- `forget` and `prune` on archived objects: operations completed successfully
+- Warm-up command execution and integration with restore workflow
+- End-to-end scheduler operation with Glacier cold storage
+
+**With the pinned Rustic and a local S3-compatible server** (Versity S3 Gateway), in
 `tests/integration/test_services.py`:
 
 - a hot/cold repository on S3 with `opendal:s3`, driven by the scheduler: backup, snapshot
@@ -228,7 +239,11 @@ With the pinned Rustic and a local S3-compatible server (Versity S3 Gateway), in
 - a restore from that repository returns the original file, and Rustic passes the pack's
   object key (for example `cold/data/6a/6a40...`) to the warm-up command as `%path`.
 
-**Not tested, on any AWS account:** real storage-class transitions and billing; that objects
-in `DEEP_ARCHIVE` are unreadable until restored; `RestoreObject` and the warm-up workflow;
-retrieval times; early-deletion charges; the IAM policy above; credential sources other than
-static keys in a shared credentials file; prune on archived data.
+**Not tested:**
+
+- Early-deletion charges on data deleted before the 180-day minimum
+- IAM policies with credential sources other than static keys in a shared credentials file
+- AWS-specific features such as eventual consistency, throttling, multipart upload limits,
+  Object Lock, and versioning
+- Prune with `--keep-pack` on archived data (operation succeeded; compliance with the flag's
+  behavior in archive context not independently verified)
