@@ -1,4 +1,4 @@
-"""Exercise the page's next-runs rendering without adding a browser dependency."""
+"""Exercise the page rendering without adding a browser dependency."""
 
 import shutil
 import subprocess
@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 
-def test_next_runs_page():
+def test_webui_page():
     node = shutil.which("node")
     if node is None:
         pytest.skip("Node.js is needed for the simulated DOM test")

@@ -165,6 +165,9 @@ detected.
 - With Node.js and a simulated DOM (unit test, skipped when Node.js is unavailable): the
   Next runs tab, chronological ordering across timezones, exclusion of unscheduled
   operations, refresh, empty state and keyboard navigation. This is not a browser test.
+- With Node.js and a simulated DOM: snapshot timestamps are plain text and each Browse
+  button selects its snapshot and requests its initial directory; the empty list spans all
+  columns. This is not a browser test.
 - One manual run of the tabbed page, not part of the test suite, in headless Chrome against
   a local repository made by the real binary: switching tabs, listing two jobs' snapshots,
   opening a snapshot, entering a directory and going back up by the path, a file name

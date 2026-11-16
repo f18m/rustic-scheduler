@@ -344,17 +344,19 @@ async function loadSnapshots(refresh) {
   }
   if (request !== browse.request) return;
   const rows = data.snapshots.map((snapshot) => {
-    const open = el("button", { type: "button", class: "link", text: when(snapshot.time), title: "List the files of this snapshot" });
+    const open = el("button", { type: "button", class: "plain", text: "📂", title: "Browse the files in this snapshot" });
+    open.setAttribute("aria-label", `Browse files in snapshot ${snapshot.id.slice(0, 8)}`);
     const start = snapshot.paths.length === 1 ? snapshot.paths[0] : "/";
     const row = el("tr", null,
-      el("td", { class: "nowrap" }, open),
+      el("td", { class: "nowrap", text: when(snapshot.time) }),
       el("td", { class: "mono", text: snapshot.id.slice(0, 8), title: snapshot.id }),
       el("td", { text: snapshot.hostname || "–" }),
       el("td", { class: "wrap", text: snapshot.paths.join(", ") }),
       el("td", { class: "num", text: snapshot.files === null ? "–" : snapshot.files.toLocaleString() }),
       el("td", { class: "num", text: bytes(snapshot.bytes) || "–" }),
       el("td", { class: "num", text: bytes(snapshot.bytes_added) || "–" }),
-      el("td", { class: "wrap", text: snapshot.tags.join(", ") })
+      el("td", { class: "wrap", text: snapshot.tags.join(", ") }),
+      el("td", null, open)
     );
     open.addEventListener("click", () => {
       for (const other of $("snapshots").tBodies[0].rows) other.classList.remove("selected");
@@ -364,12 +366,12 @@ async function loadSnapshots(refresh) {
     });
     return row;
   });
-  if (!rows.length) rows.push(el("tr", null, el("td", { colSpan: 8, class: "small", text: "This job has no snapshot yet." })));
+  if (!rows.length) rows.push(el("tr", null, el("td", { colSpan: 9, class: "small", text: "This job has no snapshot yet." })));
   $("snapshots").tBodies[0].replaceChildren(...rows);
   const count = `${data.snapshots.length} snapshot${data.snapshots.length === 1 ? "" : "s"}, listed ${when(data.fetched_at)}.`;
   note("browse-note", data.stale
     ? `${count} The repository is in use, so this list could not be renewed and may be out of date.`
-    : `${count} Choose one to see its files.`, data.stale);
+    : `${count} Use Browse to see a snapshot's files.`, data.stale);
 }
 
 function permissions(entry) {

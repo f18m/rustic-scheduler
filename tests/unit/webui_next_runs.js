@@ -12,7 +12,12 @@ class Element {
     this.events = {};
     this.attributes = {};
     this.textContent = "";
+    this.classList = {
+      add: (name) => { this.className = name; },
+      remove: () => { this.className = ""; },
+    };
   }
+  get rows() { return this.children; }
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.children = children; }
   addEventListener(name, fn) { this.events[name] = fn; }
@@ -24,7 +29,7 @@ const elements = new Map();
 function getElementById(id) {
   if (!elements.has(id)) {
     const element = new Element(id);
-    if (id === "next") element.tBodies = [new Element("tbody")];
+    if (["next", "snapshots", "entries"].includes(id)) element.tBodies = [new Element("tbody")];
     elements.set(id, element);
   }
   return elements.get(id);
@@ -86,8 +91,43 @@ context.data = {
 };
 context.fetch = async () => ({ ok: true, json: async () => context.data });
 vm.runInContext("renderJobs = renderHistory = renderManual = renderBrowse = () => {}", context);
-vm.runInContext("refresh()", context).then(() => {
+vm.runInContext("refresh()", context).then(async () => {
   assert.equal(body.children[0].children[1].textContent, "new");
+
+  const snapshots = [
+    { id: "a".repeat(64), time: "2026-01-01T00:00:00Z", hostname: "host", paths: ["/data"],
+      files: 1, bytes: 42, bytes_added: 42, tags: [] },
+    { id: "b".repeat(64), time: "2026-01-02T00:00:00Z", hostname: "host", paths: ["/a", "/b"],
+      files: null, bytes: null, bytes_added: null, tags: [] },
+  ];
+  const requests = [];
+  context.fetch = async (url) => {
+    requests.push(url);
+    const data = url.includes("/files?")
+      ? { path: url.endsWith("%2Fdata") ? "/data" : "/", entries: [], total: 0, truncated: false }
+      : { snapshots, fetched_at: "2026-01-03T00:00:00Z", stale: false };
+    return { ok: true, json: async () => data };
+  };
+  vm.runInContext('browse.job = "docs"', context);
+  await vm.runInContext("loadSnapshots(false)", context);
+  const snapshotBody = getElementById("snapshots").tBodies[0];
+  assert.equal(snapshotBody.children.length, 2);
+  for (const [index, row] of snapshotBody.children.entries()) {
+    assert.equal(row.children.length, 9);
+    assert.equal(row.children[0].textContent, new Date(snapshots[index].time).toLocaleString());
+    assert.equal(row.children[0].children.length, 0);
+    const button = row.children[8].children[0];
+    assert.equal(button.tag, "button");
+    assert.equal(button.title, "Browse the files in this snapshot");
+    assert.equal(button.attributes["aria-label"], `Browse files in snapshot ${snapshots[index].id.slice(0, 8)}`);
+    button.events.click();
+    assert.equal(row.className, "selected");
+    assert.equal(requests.at(-1), `api/v1/jobs/docs/snapshots/${snapshots[index].id}/files?path=${index ? "%2F" : "%2Fdata"}`);
+  }
+  assert.equal(snapshotBody.children[0].className, "");
+  snapshots.length = 0;
+  await vm.runInContext("loadSnapshots(false)", context);
+  assert.equal(snapshotBody.children[0].children[0].colSpan, 9);
 }).catch((error) => {
   console.error(error);
   process.exitCode = 1;

@@ -89,10 +89,11 @@ There is no button to stop a run.
 Off unless `web.browse.enabled` is set; the tab then says how to turn it on.
 
 Choose a job to see its snapshots, newest first: when each was taken, its short id, host,
-paths, number of files, size, how much it added to the repository, and tags. Choose a
-snapshot to see its files. The listing opens at the snapshot's path (or at `/` when it has
-several) and shows one directory at a time: name, size, time of last modification,
-permissions and owner. Directories open on a click; the path above the table leads back up.
+paths, number of files, size, how much it added to the repository, and tags. Use the Browse
+icon on a snapshot's row to see its files. The listing opens at the snapshot's path (or at
+`/` when it has several) and shows one directory at a time: name, size, time of last
+modification, permissions and owner. Directories open on a click; the path above the table
+leads back up.
 
 - **Read-only.** It lists; it does not download, restore or delete. For those, see
   "Using Rustic directly".
