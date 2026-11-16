@@ -32,7 +32,7 @@ mqtt:
 | `<prefix>/jobs/<job>/<operation>/state` | yes | `mqtt.qos` | `idle`, `queued` or `running` (plain text) |
 | `<prefix>/jobs/<job>/<operation>/run` | – | – | **Subscribed to**, not published: see [Commands](#commands) |
 | `<prefix>/jobs/<job>/<operation>/event` | no | `mqtt.qos` | Lifecycle event (JSON) |
-| `<prefix>/jobs/<job>/<operation>/progress` | no | 0 | Live progress (JSON) |
+| `<prefix>/jobs/<job>/<operation>/progress` | backup only | 0 for live updates; `mqtt.qos` for idle backup | Progress (JSON) |
 | `<prefix>/jobs/<job>/<operation>/result` | yes | `mqtt.qos` | Last result (JSON) |
 
 `offline` is published on a clean stop and, as the connection's last will, when the
@@ -62,7 +62,10 @@ carries the reason in `detail`. `trigger` is `schedule`, `catch_up`, `startup`, 
 ```
 
 A value Rustic did not report is `null`, never 0. Progress describes the current phase, not
-the whole operation. At most one message per `mqtt.progress_interval`.
+the whole operation. At most one live message per `mqtt.progress_interval`. Backup progress is
+retained: at start-up, when a backup starts or finishes, and while idle, its numeric fields are
+`null` until Rustic reports progress. It is republished after reconnecting to the broker. Other
+operations' progress remains non-retained.
 
 ### Results
 
@@ -161,7 +164,7 @@ operation (`backup` always; `snapshots`, `check`, `forget`, `prune` when enabled
 | `<Operation> last finished` (timestamp sensor) | `.../result` | |
 | `<Operation> last duration` (sensor, seconds) | `.../result` | |
 | `Run <operation>` (button) | publishes `run` to `.../run` | Only with `mqtt.commands.enabled` and the operation listed there |
-| `Backup progress` (sensor, %) | `.../backup/progress` | Unknown when Rustic reports no ratio; unavailable when no progress arrived for a while |
+| `Backup progress` (sensor, %) | `.../backup/progress` | -1 while idle or when Rustic reports no ratio; does not expire |
 | `Backup data added` (sensor, bytes) | `.../backup/result` | |
 | `Snapshot count` (sensor) | `.../snapshots/result` | |
 | `Latest snapshot size`, `Latest snapshot files` (sensors) | `.../snapshots/result` | Total size (bytes) and number of files in the job's newest snapshot; unknown when Rustic recorded none. Need snapshot telemetry enabled on the job. |

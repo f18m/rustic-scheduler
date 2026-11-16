@@ -51,6 +51,8 @@ class MqttPublisher:
         self.on_message: Callable[[str, bytes, bool], None] | None = None
         #: Retained messages published after every connection (topic, payload).
         self.birth: list[tuple[str, str]] = []
+        #: Current retained state to republish after every connection.
+        self.birth_state: Callable[[], list[tuple[str, dict[str, Any]]]] | None = None
         metrics.mqtt_connected.set(0)
 
     def topic(self, *parts: str) -> str:
@@ -150,6 +152,10 @@ class MqttPublisher:
                     delay = 1.0
                     for topic, payload in self.birth:
                         await client.publish(topic, REDACTOR(payload), qos=1, retain=True)
+                    if self.birth_state is not None:
+                        for topic, state in self.birth_state():
+                            text = json.dumps(state, separators=(",", ":"))
+                            await client.publish(topic, REDACTOR(text), qos=1, retain=True)
                     await client.publish(status, "online", qos=1, retain=True)
                     for topic_filter in self.subscriptions:
                         await client.subscribe(topic_filter, qos=1)

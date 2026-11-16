@@ -263,6 +263,8 @@ class Engine:
         self._progress_sent: dict[tuple[str, Operation], datetime] = {}
         self._state_sent: dict[tuple[str, Operation], str] = {}
         self._loop_task: asyncio.Task[None] | None = None
+        if self.mqtt is not None:
+            self.mqtt.birth_state = self._mqtt_progress_state
         self._pushgateway = (
             PushgatewayClient(
                 config.pushgateway.url, config.pushgateway.verify_timeout.total_seconds()
@@ -287,6 +289,24 @@ class Engine:
             if getattr(cfg, operation.value).enabled
         ]
         return operations
+
+    def _mqtt_progress_state(self) -> list[tuple[str, dict[str, Any]]]:
+        assert self.mqtt is not None
+        return [
+            (
+                self.mqtt.topic("jobs", name, Operation.BACKUP, "progress"),
+                (self.progress.get((name, Operation.BACKUP)) or Progress(self.clock())).to_dict(),
+            )
+            for name in self.runtimes
+        ]
+
+    def _clear_mqtt_backup_progress(self, key: tuple[str, Operation]) -> None:
+        if self.mqtt is not None and key[1] == Operation.BACKUP:
+            self.mqtt.publish(
+                self.mqtt.topic("jobs", *key, "progress"),
+                Progress(self.clock()).to_dict(),
+                retain=True,
+            )
 
     def _build_entries(self, now: datetime) -> None:
         scheduler = self.config.scheduler
@@ -327,6 +347,7 @@ class Engine:
         self.metrics.start_time.set(self.started_at.timestamp())
         self.metrics.jobs.set(len(self.runtimes))
         for name in self.runtimes:
+            self._clear_mqtt_backup_progress((name, Operation.BACKUP))
             for operation in self.enabled_operations(name):
                 self.metrics.declare(name, operation)
                 # Replaces a retained `running` left behind by a crash.
@@ -612,6 +633,7 @@ class Engine:
         self.metrics.running.labels(*key).set(1)
         self.metrics.clear_progress(*key)
         self.progress.pop(key, None)
+        self._clear_mqtt_backup_progress(key)
         self.current[key] = result
         self.state.mark_running(result)
         self._event(runtime.name, operation, "started", {"trigger": str(trigger)})
@@ -736,6 +758,7 @@ class Engine:
                 self.mqtt.publish(
                     self.mqtt.topic("jobs", runtime.name, operation, "progress"),
                     progress.to_dict(),
+                    retain=operation == Operation.BACKUP,
                     droppable=True,
                 )
 
@@ -925,6 +948,7 @@ class Engine:
         self.last_skips.pop(key, None)
         self.progress.pop(key, None)
         self._progress_sent.pop(key, None)
+        self._clear_mqtt_backup_progress(key)
         self.metrics.running.labels(*key).set(0)
         self.metrics.clear_progress(*key)
         self.metrics.count_result(result)
