@@ -10,9 +10,9 @@ backups on a schedule and tells you, truthfully, what happened.
 - Live progress and results on a Prometheus `/metrics` endpoint.
 - Rustic's own completed-backup metrics through a Prometheus Pushgateway sidecar, with
   delivery verified rather than assumed.
-- Optional MQTT events, optional [Apprise](https://github.com/caronc/apprise) notifications.
-- Optional MQTT commands to start a backup, check or forget, and optional Home Assistant
-  MQTT discovery (sensors and "run" buttons per job).
+- Optional MQTT notifications for backup start/progress/completion, Snapshot check and forget operations, etc (more than 20 entities provided).
+- Optional MQTT commands to start a backup, check or forget, and optional Home Assistant MQTT discovery (sensors and "run" buttons per job).
+- Optional [Apprise](https://github.com/caronc/apprise) notifications.
 - Optional web interface: running operations with progress, recent and next runs, "Run now" buttons,
   ready-to-copy commands for using Rustic directly and, if enabled, a read-only browser for
   each job's snapshots and the files in them.

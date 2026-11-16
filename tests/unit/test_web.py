@@ -89,9 +89,14 @@ async def test_page_and_assets_are_served_with_a_strict_policy(site):
         '<a href="https://github.com/f18m/rustic-scheduler" target="_blank" '
         'rel="noopener noreferrer">rustic-scheduler on GitHub</a>'
     )
+    rustic_link = (
+        '<a href="https://rustic.cli.rs/" target="_blank" '
+        'rel="noopener noreferrer"><code>rustic</code></a>'
+    )
     assert f"<footer>\n    {project_link}\n  </footer>" in text
     assert "<style" not in text and "style=" not in text
-    assert "http" not in text.replace(project_link, "", 1)
+    assert rustic_link in text
+    assert "http" not in text.replace(project_link, "", 1).replace(rustic_link, "", 1)
     assert text.count("<script") == 1 and '<script src="app.js">' in text
     assert "Using Rustic directly" in text and "has not tested a Glacier" in text
     assert '<link rel="icon" type="image/svg+xml" href="favicon.svg">' in text
