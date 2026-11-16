@@ -84,8 +84,14 @@ async def test_page_and_assets_are_served_with_a_strict_policy(site):
             text = await response.text()
     async with session.get("/") as response:
         text = await response.text()
-    # Nothing inline and nothing from another site, or the policy would block it.
-    assert "<style" not in text and "style=" not in text and "http" not in text
+    # Navigation may leave the site, but resources must not be loaded from elsewhere.
+    project_link = (
+        '<a href="https://github.com/f18m/rustic-scheduler" target="_blank" '
+        'rel="noopener noreferrer">rustic-scheduler on GitHub</a>'
+    )
+    assert f"<footer>\n    {project_link}\n  </footer>" in text
+    assert "<style" not in text and "style=" not in text
+    assert "http" not in text.replace(project_link, "", 1)
     assert text.count("<script") == 1 and '<script src="app.js">' in text
     assert "Using Rustic directly" in text and "has not tested a Glacier" in text
     assert '<link rel="icon" type="image/svg+xml" href="favicon.svg">' in text
