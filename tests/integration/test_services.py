@@ -330,10 +330,10 @@ async def test_mqtt_lifecycle_progress_and_results_with_authentication(real, bro
     events = [json.loads(p)["event"] for p in by_topic["test/backup/jobs/docs/backup/event"]]
     assert events == ["queued", "started", "finished"]
     progress = [json.loads(p) for p in by_topic["test/backup/jobs/docs/backup/progress"]]
-    assert (
-        progress[-1]["ratio"] == 1.0 and progress[-1]["bytes_done"] == progress[-1]["bytes_total"]
-    )
-    assert "eta_seconds" in progress[0] and progress[0]["eta_seconds"] is None  # unknown, not zero
+    live = [p for p in progress if p["ratio"] is not None]
+    assert live[-1]["ratio"] == 1.0 and live[-1]["bytes_done"] == live[-1]["bytes_total"]
+    assert live[0]["eta_seconds"] is None  # unknown, not zero
+    assert progress[-1]["ratio"] is None
     (final,) = [json.loads(p) for p in by_topic["test/backup/jobs/docs/backup/result"]]
     assert final["outcome"] == "succeeded" and final["data"]["files_new"] == 2
     (telemetry,) = [json.loads(p) for p in by_topic["test/backup/jobs/docs/snapshots/result"]]
@@ -349,6 +349,10 @@ async def test_mqtt_lifecycle_progress_and_results_with_authentication(real, bro
     await asyncio.sleep(1)
     retained = {topic for topic, _, retain in late if retain}
     assert "test/backup/jobs/docs/backup/result" in retained and "test/backup/status" in retained
+    assert "test/backup/jobs/docs/backup/progress" in retained
+    assert (
+        json.loads(next(p for t, p, _ in late if t.endswith("/backup/progress")))["ratio"] is None
+    )
     assert "test/backup/jobs/docs/backup/event" not in retained
 
     # A clean stop announces `offline`.
@@ -434,6 +438,18 @@ async def test_mqtt_commands_and_home_assistant_discovery_through_a_real_broker(
     collector = asyncio.create_task(collect(broker.port, prefix, messages, ready))
     await asyncio.wait_for(ready.wait(), 15)
 
+    async def retained_progress():
+        found: list = []
+        found_ready = asyncio.Event()
+        task = asyncio.create_task(collect(broker.port, prefix, found, found_ready))
+        await asyncio.wait_for(found_ready.wait(), 15)
+        topic = f"{prefix}/jobs/docs/backup/progress"
+        assert await until(lambda: any(t == topic and retain for t, _, retain in found))
+        task.cancel()
+        return json.loads(next(p for t, p, retain in found if t == topic and retain))
+
+    assert (await retained_progress())["ratio"] is None
+
     def count(result: str) -> float:
         return metric(engine.metrics, "rustic_scheduler_mqtt_commands_total", {"result": result})
 
@@ -502,6 +518,7 @@ async def test_mqtt_commands_and_home_assistant_discovery_through_a_real_broker(
     assert await connected(publisher, 30), "the publisher did not reconnect"
     await asyncio.sleep(1)  # discovery is sent right after connecting
     assert await discovered() == entities
+    assert (await retained_progress())["ratio"] is None
     await send(broker.port, f"{prefix}/jobs/docs/backup/run", "run")
     assert await until(lambda: count("accepted") == 4)
     await engine.wait_idle()

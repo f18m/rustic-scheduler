@@ -121,6 +121,8 @@ running a scripted stand-in for Rustic:
 
 The `Latest snapshot size` and `Latest snapshot files` sensors were added later and have
 only been checked as discovery payloads in unit tests, not in a running Home Assistant.
+The retained idle backup progress and removal of its expiry were also added later and have
+not been checked in a running Home Assistant.
 
 **Version**
 

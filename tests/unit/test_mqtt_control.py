@@ -163,6 +163,46 @@ async def test_start_replaces_a_stale_running_state(sandbox):
     await engine.shutdown()
 
 
+@pytest.mark.parametrize("exit_code", [0, 1])
+async def test_backup_progress_is_retained_and_cleared_after_each_run(sandbox, exit_code):
+    sandbox.write_plan(
+        {"backup": {"stdout": [STATUS, SUMMARY], "line_delay": 0.3, "exit": exit_code}}
+    )
+    engine, publisher = await controlled(sandbox, homeassistant={"enabled": True})
+    topic = "rustic-scheduler/jobs/docs/backup/progress"
+    await engine.start()
+    initial = [(json.loads(p), retain) for t, p, retain in sent(publisher) if t == topic]
+    assert len(initial) == 1 and initial[0][0]["ratio"] is None and initial[0][1]
+    assert publisher.birth_state()[0][1]["ratio"] is None
+
+    publisher.on_message(RUN.format("backup"), b"run", False)
+    for _ in range(100):
+        if engine.progress.get(("docs", Operation.BACKUP)):
+            break
+        await asyncio.sleep(0.01)
+    assert publisher.birth_state()[0][1]["ratio"] == 0.2
+    await engine.wait_idle()
+    progress = [(json.loads(p), retain) for t, p, retain in sent(publisher) if t == topic]
+    assert [payload["ratio"] for payload, _ in progress] == [None, 0.2, None]
+    assert all(retain for _, retain in progress)
+    assert publisher.birth_state()[0][1]["ratio"] is None
+    assert engine.last_results[("docs", Operation.BACKUP)].outcome == (
+        Outcome.SUCCEEDED if exit_code == 0 else Outcome.FAILED
+    )
+    await engine.shutdown()
+
+
+async def test_backup_without_progress_keeps_an_unknown_retained_value(sandbox):
+    sandbox.write_plan({"backup": {"stdout": [SUMMARY]}})
+    engine, publisher = await controlled(sandbox)
+    publisher.on_message(RUN.format("backup"), b"run", False)
+    await engine.wait_idle()
+    topic = "rustic-scheduler/jobs/docs/backup/progress"
+    progress = [(json.loads(p), retain) for t, p, retain in sent(publisher) if t == topic]
+    assert len(progress) == 2
+    assert all(payload["ratio"] is None and retain for payload, retain in progress)
+
+
 # ------------------------------------------------------------ configuration
 
 
@@ -222,7 +262,12 @@ def test_discovery_describes_enabled_operations_and_removes_the_rest():
     state = found[base + "backup_state/config"]
     assert state["state_topic"] == "home/backup/jobs/my.docs/backup/state"
     assert state["options"] == ["idle", "queued", "running"]
-    assert found[base + "backup_progress/config"]["expire_after"] >= 30
+    progress = found[base + "backup_progress/config"]
+    assert progress["state_topic"] == "home/backup/jobs/my.docs/backup/progress"
+    assert "expire_after" not in progress
+    assert progress["value_template"] == (
+        "{{ (value_json.ratio * 100) | round(1) if value_json.ratio is not none else -1 }}"
+    )
     assert found[base + "snapshots_count/config"]["name"] == "Snapshot count"
     size = found[base + "snapshots_latest_bytes/config"]
     assert size["state_topic"] == "home/backup/jobs/my.docs/snapshots/result"

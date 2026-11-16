@@ -44,7 +44,7 @@ _ATTRIBUTES = (
 )
 
 
-def _entity(key: str, base: str, title: str, progress_expiry: int) -> dict[str, Any]:
+def _entity(key: str, base: str, title: str) -> dict[str, Any]:
     result = f"{base}/result"
     match key:
         case "state":
@@ -89,17 +89,15 @@ def _entity(key: str, base: str, title: str, progress_expiry: int) -> dict[str, 
                 "icon": "mdi:play-circle-outline",
             }
         case "progress":
-            # A ratio Rustic did not report renders as None, which Home Assistant
-            # shows as unknown rather than 0.
+            # -1 means no reported ratio; it is not a measured percentage.
             return {
                 "name": f"{title} progress",
                 "state_topic": f"{base}/progress",
                 "value_template": (
                     "{{ (value_json.ratio * 100) | round(1) "
-                    "if value_json.ratio is not none else None }}"
+                    "if value_json.ratio is not none else -1 }}"
                 ),
                 "unit_of_measurement": "%",
-                "expire_after": progress_expiry,
                 "icon": "mdi:progress-upload",
             }
         case "data_added":
@@ -149,7 +147,6 @@ def discovery_messages(
     prefix = mqtt.topic_prefix.strip("/")
     discovery = ha.discovery_prefix.strip("/")
     startable = set(mqtt.commands.operations) if mqtt.commands.enabled else set()
-    expiry = max(int(mqtt.progress_interval.total_seconds() * 3), 60)
     origin = {
         "name": "rustic-scheduler",
         "sw_version": __version__,
@@ -177,7 +174,7 @@ def discovery_messages(
                 if not wanted:
                     messages.append((topic, ""))
                     continue
-                config = _entity(key, base, title.capitalize(), expiry) | {
+                config = _entity(key, base, title.capitalize()) | {
                     "unique_id": f"{ha.node_id}_{object_id}",
                     "availability_topic": f"{prefix}/status",
                     "device": device,
