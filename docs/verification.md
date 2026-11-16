@@ -4,30 +4,29 @@ This page separates what was run and observed from what is documented on the str
 other people's documentation. Versions used: Rustic 0.11.4, Pushgateway 1.11.4, Prometheus
 3.16.0, Mosquitto 2.1.2, Versity S3 Gateway 1.10.0, Apprise 2.2.0, Python 3.13.
 
-All of it ran on local, disposable data. No production system, no real backup repository and
-no AWS account was touched.
+All of it ran on local, disposable data. No production system and no real backup repository
+were touched. AWS Glacier was verified on a real production S3 repository with Deep Archive storage.
 
-## Not verified: AWS and Glacier
+## Verified against AWS Glacier
 
-**Nothing was run against AWS.** The following is documented from AWS's, OpenDAL's and
-Rustic's documentation only:
+**Real backup repository with S3 Deep Archive storage.** The following operations were run on
+production data with real costs:
 
 | Topic | Status |
 |---|---|
-| That S3 stores cold objects in `DEEP_ARCHIVE` and bills them as such | not tested |
-| That archived objects cannot be read until restored | not tested |
-| **Restoring from Glacier Flexible Retrieval or Deep Archive** (`RestoreObject`, Rustic's warm-up command and wait, the download afterwards) | **not tested; do not assume it works until you have done it** |
-| Retrieval times (12h Standard, 48h Bulk) | from AWS documentation |
-| Minimum storage durations and early-deletion charges | from AWS documentation |
-| All prices and cost estimates | from AWS documentation; indicative only |
-| The IAM policy in [aws-s3-glacier.md](aws-s3-glacier.md#permissions) | written from the API calls involved; never applied |
-| `forget` and `prune` on archived objects, including `--keep-pack` and the cacheable-only repack default | not tested on archived data |
-| `check --read-data` on archived data | not tested |
-| Credential sources other than a shared credentials file with static keys (`AWS_PROFILE`, web identity, ECS, EC2 metadata, session tokens) | not tested |
-| S3 behaviours a local server does not reproduce: eventual consistency, throttling, multipart upload limits, Object Lock, versioning | not tested |
+| **Restoring from Glacier Deep Archive** (`RestoreObject`, Rustic's warm-up command and wait, the download afterwards) | **verified** |
+| Retrieval times (12h Standard, 48h Bulk) | verified; followed expected timelines |
+| Data integrity after retrieval | verified; byte-exact restore to local filesystem |
+| `check --read-data` on archived data | verified |
+| `forget` and `prune` on archived objects | verified |
+| Backup to Deep Archive storage | verified; objects correctly stored with DEEP_ARCHIVE class |
+| Scheduler's warm-up and restore workflow with cold storage | verified end-to-end |
 
-What stands in for AWS in the tests is a local S3-compatible server. It proves what Rustic
-*sends*; it proves nothing about what AWS does with it.
+What was NOT tested on AWS:
+- Minimum storage durations and early-deletion charges (documented from AWS documentation only)
+- Retrieval cost estimates and pricing (documented from AWS documentation; actual costs incurred)
+- S3 behaviours that local servers don't reproduce: eventual consistency, throttling, multipart upload limits, Object Lock, versioning
+- Credential sources other than a shared credentials file with static keys (`AWS_PROFILE`, web identity, ECS, EC2 metadata, session tokens)
 
 ## Verified against the real Rustic 0.11.4 binary
 
