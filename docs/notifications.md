@@ -38,6 +38,13 @@ target at it with Apprise's own `apprise://` or `apprises://` URL.
 | `maintenance_failure` | `forget`, `prune`, `check` or snapshot telemetry ended `failed`, `interrupted` or `unknown` | on |
 | `maintenance_success` | One of those succeeded | off |
 
+## Start-up
+
+When notifications are enabled, the scheduler also sends one notification once it is running:
+`rustic-scheduler <version> started`, with the scheduler version, the Rustic version and the
+number of jobs. It is not selected by `events`; to stop it, disable notifications. Each start
+sends it again, so a crash loop repeats it. Its metric event label is `scheduler_started`.
+
 ## Content
 
 Title: `<operation> <outcome>: <job>`, for example `backup failed: documents`.
@@ -45,7 +52,7 @@ Title: `<operation> <outcome>: <job>`, for example `backup failed: documents`.
 Body: job, operation, outcome, reason, trigger, duration; for failures Rustic's exit status
 and the last error lines; for a succeeded backup the file counts and bytes added; for forget
 the number of snapshots removed and kept. Apprise's notification type is `success`, `warning`
-(skipped) or `failure`.
+(skipped) or `failure`; the start-up notification is `info`.
 
 The body never contains command lines, environment variables or notification URLs, and passes
 through the same secret masking as the logs.

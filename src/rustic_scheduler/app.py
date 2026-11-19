@@ -172,6 +172,7 @@ async def serve(config_path: Path) -> int:
             log.error("configuration: %s", problem)
         log.error("not starting: fix the configuration problems above")
         return 2
+    log.info("Starting rustic-scheduler %s with Rustic %s", __version__, version)
     for warning in warnings:
         log.warning("configuration: %s", warning)
 
@@ -193,9 +194,7 @@ async def serve(config_path: Path) -> int:
 
     mqtt_task = asyncio.create_task(mqtt.run(), name="mqtt") if mqtt else None
     log.info(
-        "rustic-scheduler %s with Rustic %s (%s), %d job(s)",
-        __version__,
-        version,
+        "rustic binary %s, %d job(s)",
         next(iter(runtimes.values())).binary,
         len(runtimes),
     )
@@ -216,6 +215,8 @@ async def serve(config_path: Path) -> int:
                 mqtt_task.cancel()
             return 1
     await engine.start()
+    if notifier:
+        notifier.submit_startup(__version__, version, len(runtimes))
     await stop.wait()
     log.info("shutting down: stopping running operations")
     await engine.shutdown()

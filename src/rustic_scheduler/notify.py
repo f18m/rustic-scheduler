@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Coroutine
+from typing import Any
 
 import apprise
 
@@ -20,6 +22,10 @@ from .model import Operation, OperationResult, Outcome, utcnow
 from .redact import REDACTOR
 
 log = logging.getLogger(__name__)
+
+#: Event name of the start-up notification. It is not one of the `events` the user
+#: selects: it is sent whenever notifications are enabled.
+STARTED_EVENT = "scheduler_started"
 
 
 def event_for(result: OperationResult) -> str:
@@ -81,7 +87,23 @@ class Notifier:
         event = event_for(result)
         if event not in self.config.events:
             return
-        task = asyncio.create_task(self.send(event, result))
+        self._spawn(self.send(event, result))
+
+    def submit_startup(self, scheduler_version: str, rustic_version: str, jobs: int) -> None:
+        """Announce that the scheduler is running. Sent in the background."""
+        body = REDACTOR(f"Version: {scheduler_version}\nRustic: {rustic_version}\nJobs: {jobs}")
+        self._spawn(
+            self._deliver(
+                STARTED_EVENT,
+                "startup",
+                f"rustic-scheduler {scheduler_version} started",
+                body,
+                apprise.NotifyType.INFO,
+            )
+        )
+
+    def _spawn(self, delivery: Coroutine[Any, Any, bool]) -> None:
+        task = asyncio.create_task(delivery)
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
@@ -94,6 +116,16 @@ class Notifier:
             if result.outcome == Outcome.SKIPPED
             else apprise.NotifyType.FAILURE
         )
+        return await self._deliver(event, f"job {result.job}", title, body, kind)
+
+    async def _deliver(
+        self,
+        event: str,
+        subject: str,
+        title: str,
+        body: str,
+        kind: apprise.NotifyType,
+    ) -> bool:
         attempts = self.config.retries + 1
         for attempt in range(1, attempts + 1):
             problem = "delivery failed"
@@ -114,9 +146,9 @@ class Notifier:
             except Exception as exc:
                 problem = REDACTOR(f"{type(exc).__name__}: {exc}")
             log.warning(
-                "notification %s for job %s failed (attempt %d of %d): %s",
+                "notification %s for %s failed (attempt %d of %d): %s",
                 event,
-                result.job,
+                subject,
                 attempt,
                 attempts,
                 problem,
