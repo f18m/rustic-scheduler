@@ -5,6 +5,7 @@ import re
 from datetime import UTC, datetime, timedelta
 
 import aiohttp
+import apprise
 import pytest
 from aiohttp import web
 
@@ -204,6 +205,17 @@ async def test_only_selected_events_are_sent(tmp_path):
     assert len(target.calls) == 1 and target.calls[0]["title"] == "backup failed: docs"
     assert sent(metrics, "backup_failure", "sent") == 1
     assert sent(metrics, "backup_success", "sent") is None
+
+
+async def test_startup_is_announced_whatever_events_are_selected(tmp_path):
+    instance, target, metrics = notifier(tmp_path, [True], events=["backup_failure"])
+    instance.submit_startup("0.5.0", "0.11.4", 3)
+    await instance.drain()
+    [call] = target.calls
+    assert call["title"] == "rustic-scheduler 0.5.0 started"
+    assert call["body"] == "Version: 0.5.0\nRustic: 0.11.4\nJobs: 3"
+    assert call["notify_type"] == apprise.NotifyType.INFO
+    assert sent(metrics, "scheduler_started", "sent") == 1
 
 
 async def test_default_events_cover_backup_results_and_maintenance_failures(tmp_path):
