@@ -87,7 +87,7 @@ services:
 
   mosquitto:
     profiles: [mqtt]
-    image: eclipse-mosquitto:2.1.2-alpine
+    image: eclipse-mosquitto:2.1.4-alpine
     restart: unless-stopped
     volumes:
       - ./examples/mosquitto:/mosquitto/config
