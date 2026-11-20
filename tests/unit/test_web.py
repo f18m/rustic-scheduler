@@ -639,7 +639,10 @@ def test_web_configuration(sandbox):
     ("section", "problem"),
     [
         ({"enabled": True, "port": 9300}, "web.port: the web interface needs its own port"),
-        ({"enabled": True, "auth": {"enabled": True, "password_file": "/nonexistent/pw"}}, "web.auth.password_file: file"),
+        (
+            {"enabled": True, "auth": {"enabled": True, "password_file": "/nonexistent/pw"}},
+            "web.auth.password_file: file",
+        ),
         ({"enabled": True, "operations": ["restore"]}, "web.operations.0"),
         ({"enabled": True, "auth": {"username": "a:b"}}, "must not contain ':'"),
         ({"enabled": True, "history_size": 0}, "web.history_size"),

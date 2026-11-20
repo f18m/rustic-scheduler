@@ -316,7 +316,9 @@ class WebServer:
                     "initialization should have failed"
                 )
             elif not os.access(config.auth.password_file, os.R_OK):
-                log.error("web interface: web.auth.password_file is not readable; every request will fail")
+                log.error(
+                    "web interface: web.auth.password_file is not readable; every request will fail"
+                )
         else:
             log.warning(
                 "web interface: authentication disabled (web.auth.enabled=false), so anyone who can reach "

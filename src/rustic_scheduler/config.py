@@ -368,9 +368,7 @@ class WebAuthConfig(_Model):
         if not self.username or ":" in self.username:
             raise ValueError("username must be non-empty and must not contain ':'")
         if self.enabled and self.password_file is None:
-            raise ValueError(
-                "web.auth.enabled is true but web.auth.password_file is missing"
-            )
+            raise ValueError("web.auth.enabled is true but web.auth.password_file is missing")
         return self
 
 
