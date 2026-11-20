@@ -354,6 +354,24 @@ class WebBrowseConfig(_Model):
         return self
 
 
+class WebAuthConfig(_Model):
+    """HTTP Basic authentication for the web interface."""
+
+    enabled: bool = False
+    #: Username for HTTP Basic authentication.
+    username: str = "admin"
+    #: Path to a file containing the password for HTTP Basic authentication.
+    password_file: Path | None = None
+
+    @model_validator(mode="after")
+    def _validate(self) -> WebAuthConfig:
+        if not self.username or ":" in self.username:
+            raise ValueError("username must be non-empty and must not contain ':'")
+        if self.enabled and self.password_file is None:
+            raise ValueError("web.auth.enabled is true but web.auth.password_file is missing")
+        return self
+
+
 class WebConfig(_Model):
     """Browser interface on its own port. Off unless enabled."""
 
@@ -366,13 +384,25 @@ class WebConfig(_Model):
     #: Operations the page may start. `forget` and `prune` delete data, so
     #: they have to be listed explicitly. Empty: the page is read-only.
     operations: list[CommandOperation] = ["backup", "check"]
-    #: HTTP Basic authentication, required when `password_file` is set.
-    username: str = "admin"
-    password_file: Path | None = None
+    #: HTTP Basic authentication configuration.
+    auth: WebAuthConfig = WebAuthConfig()
     #: Finished and skipped runs kept in memory for the history table.
     history_size: int = Field(default=50, ge=1, le=1000)
     #: Read-only snapshot and file browser. It shows file names to whoever can open the page.
     browse: WebBrowseConfig = WebBrowseConfig()
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_auth_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict) and ("username" in data or "password_file" in data):
+            auth_data = data.pop("auth", {}) if isinstance(data.get("auth"), dict) else {}
+            if "username" in data:
+                auth_data["username"] = data.pop("username")
+            if "password_file" in data:
+                auth_data["password_file"] = data.pop("password_file")
+                auth_data.setdefault("enabled", True)
+            data["auth"] = auth_data
+        return data
 
     @field_validator("public_url")
     @classmethod
@@ -389,12 +419,6 @@ class WebConfig(_Model):
         if value is not None and not (value.path or "/").endswith("/"):
             return AnyHttpUrl(f"{value}/")
         return value
-
-    @model_validator(mode="after")
-    def _validate(self) -> WebConfig:
-        if not self.username or ":" in self.username:
-            raise ValueError("username must be non-empty and must not contain ':'")
-        return self
 
 
 class PushgatewayConfig(_Model):
@@ -634,9 +658,9 @@ def _semantic_problems(config: Config) -> list[str]:
                 "web.port: the web interface needs its own port, different from http.port "
                 "(which stays read-only)"
             )
-        secret = config.web.password_file
+        secret = config.web.auth.password_file
         if secret is not None and not secret.is_file():
-            problems.append(f"web.password_file: file {secret} does not exist")
+            problems.append(f"web.auth.password_file: file {secret} does not exist")
     if config.notifications.enabled:
         for config_file in config.notifications.config_files:
             if not config_file.is_file():

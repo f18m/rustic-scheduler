@@ -12,7 +12,7 @@ A request is handled exactly like ``rustic-scheduler trigger``: forget and
 prune must also be enabled on the job.
 
 Protection (see docs/web.md):
-* HTTP Basic authentication when ``web.password_file`` is set;
+* HTTP Basic authentication when ``web.auth.enabled`` is true and ``web.auth.password_file`` is set;
 * POST needs a custom header and a same-origin ``Origin``, so that another web
   site open in the same browser cannot start a run;
 * a strict Content-Security-Policy, and a page that never builds HTML from data.
@@ -147,9 +147,9 @@ def overview(engine: Engine, config: WebConfig, rustic_version: str) -> dict[str
 
 def _password(config: WebConfig) -> str | None:
     """The expected password, read on every request so a rotated secret is picked up."""
-    if config.password_file is None:
+    if not config.auth.enabled or config.auth.password_file is None:
         return None
-    password = config.password_file.read_text(encoding="utf-8").strip()
+    password = config.auth.password_file.read_text(encoding="utf-8").strip()
     REDACTOR.register([password])
     return password
 
@@ -189,12 +189,12 @@ def create_app(engine: Engine, config: WebConfig, rustic_version: str) -> web.Ap
             password = _password(config)
         except OSError as exc:
             # Never fall back to "no password" when the secret cannot be read.
-            log.error("web interface: cannot read web.password_file: %s", exc.strerror or exc)
+            log.error("web interface: cannot read web.auth.password_file: %s", exc.strerror or exc)
             response = web.json_response(
                 {"message": "the password file cannot be read; see the scheduler log"}, status=503
             )
         else:
-            if password is not None and not _authorised(request, config.username, password):
+            if password is not None and not _authorised(request, config.auth.username, password):
                 response = web.Response(
                     status=401,
                     text="authentication required\n",
@@ -299,6 +299,7 @@ class WebServer:
             await runner.cleanup()
             raise
         self._runner = runner
+        auth_status = "password" if (config.auth.enabled and config.auth.password_file) else "none"
         log.info(
             "web interface on http://%s:%s/ (may start: %s; snapshot browsing: %s; "
             "authentication: %s)",
@@ -306,17 +307,25 @@ class WebServer:
             config.port,
             ", ".join(config.operations) or "nothing",
             "on" if config.browse.enabled else "off",
-            "password" if config.password_file else "none",
+            auth_status,
         )
-        if config.password_file is None:
+        if config.auth.enabled:
+            if config.auth.password_file is None:
+                log.warning(
+                    "web interface: web.auth.enabled is true but no web.auth.password_file; "
+                    "initialization should have failed"
+                )
+            elif not os.access(config.auth.password_file, os.R_OK):
+                log.error(
+                    "web interface: web.auth.password_file is not readable; every request will fail"
+                )
+        else:
             log.warning(
-                "web interface: no web.password_file, so anyone who can reach port %s can "
-                "start the operations above%s",
+                "web interface: authentication disabled (web.auth.enabled=false), so anyone who "
+                "can reach port %s can start the operations above%s",
                 config.port,
                 " and list the files in every job's snapshots" if config.browse.enabled else "",
             )
-        elif not os.access(config.password_file, os.R_OK):
-            log.error("web interface: web.password_file is not readable; every request will fail")
 
     async def stop(self) -> None:
         if self._runner is not None:
