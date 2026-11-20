@@ -321,8 +321,8 @@ class WebServer:
                 )
         else:
             log.warning(
-                "web interface: authentication disabled (web.auth.enabled=false), so anyone who can reach "
-                "port %s can start the operations above%s",
+                "web interface: authentication disabled (web.auth.enabled=false), so anyone who "
+                "can reach port %s can start the operations above%s",
                 config.port,
                 " and list the files in every job's snapshots" if config.browse.enabled else "",
             )

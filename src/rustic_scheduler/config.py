@@ -394,15 +394,14 @@ class WebConfig(_Model):
     @model_validator(mode="before")
     @classmethod
     def _migrate_auth_fields(cls, data: Any) -> Any:
-        if isinstance(data, dict):
-            if "username" in data or "password_file" in data:
-                auth_data = data.pop("auth", {}) if isinstance(data.get("auth"), dict) else {}
-                if "username" in data:
-                    auth_data["username"] = data.pop("username")
-                if "password_file" in data:
-                    auth_data["password_file"] = data.pop("password_file")
-                    auth_data.setdefault("enabled", True)
-                data["auth"] = auth_data
+        if isinstance(data, dict) and ("username" in data or "password_file" in data):
+            auth_data = data.pop("auth", {}) if isinstance(data.get("auth"), dict) else {}
+            if "username" in data:
+                auth_data["username"] = data.pop("username")
+            if "password_file" in data:
+                auth_data["password_file"] = data.pop("password_file")
+                auth_data.setdefault("enabled", True)
+            data["auth"] = auth_data
         return data
 
     @field_validator("public_url")
