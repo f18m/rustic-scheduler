@@ -31,7 +31,10 @@ web:
   port: 9301                       # also publish it in compose.yaml
   # public_url: https://backup.example.com/   # link in Home Assistant discovery
   operations: [backup, check]      # add `forget` only if that is acceptable
-  # password_file: /run/secrets/web_password   # without it there is no authentication
+  auth:
+    enabled: false                 # set to true to require HTTP Basic authentication
+    # username: admin              # HTTP Basic auth username (default: admin)
+    # password_file: /run/secrets/web_password   # required when auth.enabled is true
   browse:
     enabled: false                 # Snapshots tab: list each job's snapshots and their files
 

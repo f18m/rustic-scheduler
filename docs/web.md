@@ -30,7 +30,7 @@ path.
 The scheduler publishes the URL as written, in retained messages that every client of the
 broker can read. It cannot tell a secret path segment from an ordinary one: do not use a
 URL whose path carries an access token (as some tunnel and share-link services issue), and
-put authentication in `web.password_file` or the reverse proxy instead.
+put authentication in `web.auth.password_file` or the reverse proxy instead.
 
 The page has five tabs: **Jobs**, **Snapshots**, **Recent runs**, **Next runs** and **Using
 Rustic directly**. The address keeps the open tab (`#jobs`, `#snapshots`, `#history`, `#next`,
@@ -167,7 +167,8 @@ metrics port (9300 stays read-only) and off by default.
 | Protection | What it does |
 |---|---|
 | `web.operations` | Limits what can be started. Keep `forget` and `prune` out unless everyone who can open the page may delete backup data within the job's retention rules. |
-| `web.password_file` | HTTP Basic authentication (`web.username`, default `admin`) on every route, the page included. The file holds the password alone; it is read at each request, so replacing the file rotates it. If the file cannot be read, every request fails with 503: an unreadable password never means "no password". |
+| `web.auth.enabled` | Enable HTTP Basic authentication on every route, the page included. When enabled, `web.auth.password_file` must be set. When disabled, no authentication is required. |
+| `web.auth.password_file` | The file holds the password for HTTP Basic authentication (with `web.auth.username`, default `admin`). It is read at each request, so replacing the file rotates it. If the file cannot be read, every request fails with 503: an unreadable password never means "no password". Only used when `web.auth.enabled` is true. |
 | `web.browse.enabled` | Off by default. When on, everyone who can open the page can read the names, sizes, times and owners of the files in every job's snapshots; not their contents. |
 | Same-site check | A request to start an operation, or to list snapshots or files, must carry a header that only the scheduler's own page sends, and a matching `Origin`. Another web site open in your browser cannot start a run or make the scheduler run Rustic. |
 | Content policy | The page loads nothing from other sites and has no inline script; job names and error text are inserted as text. |

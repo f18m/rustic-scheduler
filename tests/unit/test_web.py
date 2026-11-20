@@ -610,7 +610,7 @@ def test_web_configuration(sandbox):
     assert sandbox.config().web.enabled is False
     config = sandbox.config(web={"enabled": True})
     assert config.web.port == 9301 and config.web.operations == ["backup", "check"]
-    assert config.web.password_file is None and config.web.history_size == 50
+    assert config.web.auth.password_file is None and config.web.history_size == 50
     assert config.web.browse.enabled is False and config.web.browse.max_entries == 5000
     browse = sandbox.config(web={"enabled": True, "browse": {"enabled": True, "timeout": "5m"}})
     assert browse.web.browse.enabled and browse.web.browse.timeout.total_seconds() == 300
@@ -639,9 +639,9 @@ def test_web_configuration(sandbox):
     ("section", "problem"),
     [
         ({"enabled": True, "port": 9300}, "web.port: the web interface needs its own port"),
-        ({"enabled": True, "password_file": "/nonexistent/pw"}, "web.password_file: file"),
+        ({"enabled": True, "auth": {"enabled": True, "password_file": "/nonexistent/pw"}}, "web.auth.password_file: file"),
         ({"enabled": True, "operations": ["restore"]}, "web.operations.0"),
-        ({"enabled": True, "username": "a:b"}, "must not contain ':'"),
+        ({"enabled": True, "auth": {"username": "a:b"}}, "must not contain ':'"),
         ({"enabled": True, "history_size": 0}, "web.history_size"),
         ({"enabled": True, "password": "inline"}, "web.password: unknown setting"),
         ({"enabled": True, "browse": {"max_entries": 0}}, "web.browse.max_entries"),
