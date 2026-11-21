@@ -5,6 +5,8 @@ const POLL_MS = 3000;
 const $ = (id) => document.getElementById(id);
 let failures = 0;
 let noticeTimer = null;
+// Whether run output can be shown (web.run_logs), from the latest overview.
+let runLogs = { available: false, message: null };
 
 function el(tag, props, ...children) {
   const node = document.createElement(tag);
@@ -126,8 +128,14 @@ async function run(job, row, button) {
       { method: "POST", headers: { "X-Requested-With": "rustic-scheduler" } }
     );
     const body = await response.json().catch(() => ({}));
-    if (response.ok) notify(`${row.operation} for ${job} was queued. Queued is not a result: watch its state below.`, "ok");
-    else notify(`${row.operation} for ${job} was not started: ${body.message || response.statusText}`, "error");
+    if (response.ok) {
+      notify(`${row.operation} for ${job} was queued. Queued is not a result: watch its state below.`, "ok");
+      if (runLogs.available) {
+        openConsole(job, row.operation, { previous: body.previous_run_id ?? null, requestedAt: body.requested_at });
+      }
+    } else {
+      notify(`${row.operation} for ${job} was not started: ${body.message || response.statusText}`, "error");
+    }
   } catch (error) {
     notify(`${row.operation} for ${job} could not be requested: ${error.message}`, "error");
   }
@@ -145,6 +153,14 @@ function renderJobs(data) {
         button.disabled = row.state !== "idle" || data.shutting_down;
         button.addEventListener("click", () => run(job.name, row, button));
         action.append(button);
+      }
+      const shown = row.state === "running" ? row.run_id : row.last_result && row.last_result.run_id;
+      if (runLogs.available && shown) {
+        const label = row.state === "running" ? "Output" : "Last output";
+        const view = el("button", { type: "button", class: "plain", text: label,
+          title: "Show Rustic's output of this run" });
+        view.addEventListener("click", () => openConsole(job.name, row.operation, { run: shown }));
+        action.append(view);
       }
       body.append(el("tr", null,
         el("td", { class: "name", text: row.operation }),
@@ -171,6 +187,17 @@ function renderJobs(data) {
   $("jobs").replaceChildren(...cards);
 }
 
+function outputCell(item) {
+  const cell = el("td", { class: "nowrap" });
+  if (runLogs.available && item.run_id && item.log_file) {
+    const view = el("button", { type: "button", class: "plain", text: "Output",
+      title: "Show Rustic's output of this run" });
+    view.addEventListener("click", () => openConsole(item.job, item.operation, { run: item.run_id }));
+    cell.append(view);
+  }
+  return cell;
+}
+
 function renderHistory(data) {
   const rows = data.history.map((item) => el("tr", null,
     el("td", { class: "nowrap", text: when(item.finished_at) }),
@@ -179,9 +206,10 @@ function renderHistory(data) {
     el("td", null, badge(item.outcome)),
     el("td", { text: item.trigger }),
     el("td", { class: "nowrap", text: span(item.duration_seconds) }),
-    el("td", { class: "detail", text: [item.reason !== "none" ? item.reason : "", item.detail].filter(Boolean).join(": ") })
+    el("td", { class: "detail", text: [item.reason !== "none" ? item.reason : "", item.detail].filter(Boolean).join(": ") }),
+    outputCell(item)
   ));
-  if (!rows.length) rows.push(el("tr", null, el("td", { colSpan: 7, class: "small", text: "Nothing has run yet." })));
+  if (!rows.length) rows.push(el("tr", null, el("td", { colSpan: 8, class: "small", text: "Nothing has run yet." })));
   $("history").tBodies[0].replaceChildren(...rows);
   $("history-note").textContent =
     `The last ${data.history_size} finished or skipped runs since the scheduler started at ${when(data.started_at)}, ` +
@@ -297,7 +325,11 @@ const browse = { enabled: false, jobs: "", job: null, loaded: null, snapshot: nu
 async function ask(url) {
   const response = await fetch(url, { cache: "no-store", headers: SENT });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.message || `HTTP ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(body.message || `HTTP ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
   return body;
 }
 
@@ -448,6 +480,140 @@ async function loadFiles(path) {
 $("browse-job").addEventListener("change", () => { browse.job = $("browse-job").value; loadSnapshots(false); });
 $("browse-refresh").addEventListener("click", () => { if (browse.job) loadSnapshots(true); });
 
+// ------------------------------------------------------------- run output
+
+// The run's log is read from a byte offset: whole lines come back, and only new ones
+// are appended. Everything is inserted as text.
+const CONSOLE_POLL_MS = 1000;
+const CONSOLE_MAX_CHARS = 2000000;
+const term = { generation: 0, timer: null, job: null, operation: null, run: null, wait: null, offset: 0, chars: 0 };
+
+function consoleStatus(text, error) {
+  note("console-status", text, error);
+}
+
+function openConsole(job, operation, options) {
+  term.generation += 1;
+  clearTimeout(term.timer);
+  Object.assign(term, {
+    job, operation, run: options.run || null, wait: options.run ? null : options, offset: 0, chars: 0,
+  });
+  $("console-title").textContent = `${operation} · ${job}`;
+  $("console-state").replaceChildren();
+  $("console-text").replaceChildren();
+  $("console-follow").checked = true;
+  consoleStatus(options.run ? "Loading the output…" : "Waiting for the run to start…");
+  if (!$("console").open) $("console").showModal();
+  pollConsole(term.generation);
+}
+
+function stopConsole() {
+  term.generation += 1;
+  clearTimeout(term.timer);
+}
+
+function appendOutput(text, kind) {
+  if (!text) return;
+  const pre = $("console-text");
+  const follow = $("console-follow").checked;
+  const lines = text.endsWith("\n") ? text.slice(0, -1).split("\n") : text.split("\n");
+  let plain = [];
+  const flush = () => {
+    if (plain.length) pre.append(document.createTextNode(plain.join("\n") + "\n"));
+    plain = [];
+  };
+  for (const line of lines) {
+    const cls = kind || (line.startsWith("[rustic-scheduler] ") || line.startsWith("$ ") ? "note" : null);
+    if (cls) { flush(); pre.append(el("span", { class: cls, text: line + "\n" })); }
+    else plain.push(line);
+  }
+  flush();
+  term.chars += text.length;
+  // A very long log keeps only its end in the page.
+  while (term.chars > CONSOLE_MAX_CHARS && pre.firstChild) {
+    term.chars -= pre.firstChild.textContent.length;
+    pre.firstChild.remove();
+  }
+  if (follow) pre.scrollTop = pre.scrollHeight;
+}
+
+function showRun(state, run) {
+  const head = $("console-state");
+  if (state === "running") head.replaceChildren(badge("running"));
+  else if (run) head.replaceChildren(badge(run.outcome), run.dry_run ? el("span", { class: "small", text: " dry run" }) : "");
+  if (!run) return "";
+  if (state === "running") return `Running since ${when(run.started_at)} · started by ${run.trigger}`;
+  const parts = [`Finished ${when(run.finished_at)} after ${span(run.duration_seconds)} · started by ${run.trigger}`];
+  if (run.attempts > 1) parts.push(`${run.attempts} attempts`);
+  if (run.outcome !== "succeeded" && run.detail) parts.push(run.detail);
+  return parts.join(" · ");
+}
+
+async function pollConsole(generation) {
+  if (generation !== term.generation) return;
+  const again = (ms) => { term.timer = setTimeout(() => pollConsole(generation), ms); };
+  const query = new URLSearchParams({ offset: String(term.offset) });
+  if (term.run) query.set("run", term.run);
+  let data;
+  try {
+    data = await ask(`api/v1/jobs/${encodeURIComponent(term.job)}/${encodeURIComponent(term.operation)}/output?${query}`);
+  } catch (error) {
+    if (generation !== term.generation) return;
+    consoleStatus(`The output could not be loaded: ${error.message}`, true);
+    if (error.status !== 404 && error.status !== 403) again(CONSOLE_POLL_MS * 3);
+    return;
+  }
+  if (generation !== term.generation) return;
+  if (!term.run) {
+    // After "Run now": wait for a run other than the one that was the latest then.
+    const id = data.run ? data.run.run_id : null;
+    if (data.state === "running" || (data.state === "finished" && id && id !== term.wait.previous)) {
+      term.run = id;
+    } else {
+      const skip = data.last_skip;
+      if (data.state !== "queued" && skip && term.wait.requestedAt &&
+          new Date(skip.finished_at) >= new Date(term.wait.requestedAt)) {
+        $("console-state").replaceChildren(badge("skipped"));
+        consoleStatus(`The run did not start: ${skip.detail}`, true);
+        return;
+      }
+      consoleStatus(data.state === "queued"
+        ? "Queued: waiting for the repository, or for this job's other operations, to be free."
+        : "Waiting for the run to start…");
+      again(CONSOLE_POLL_MS);
+      return;
+    }
+  }
+  const status = showRun(data.state, data.run);
+  const log = data.log;
+  if (!log.available) {
+    consoleStatus([status, `No output to show: ${log.message}`].filter(Boolean).join(" · "));
+  } else {
+    if (log.skipped && term.offset === 0) {
+      appendOutput(`… the first ${bytes(log.skipped)} of this log are not shown …\n`, "gap");
+    }
+    appendOutput(log.text);
+    term.offset = log.next_offset;
+    consoleStatus(status);
+  }
+  if (log.available && log.more) again(0);
+  else if (data.state !== "finished") again(CONSOLE_POLL_MS);
+}
+
+$("console-close").addEventListener("click", () => $("console").close());
+$("console").addEventListener("close", stopConsole);
+$("console-copy").addEventListener("click", async () => {
+  const copy = $("console-copy");
+  try { await navigator.clipboard.writeText($("console-text").textContent); copy.textContent = "Copied"; }
+  catch { copy.textContent = "Select and copy by hand"; }
+  setTimeout(() => { copy.textContent = "Copy"; }, 2000);
+});
+$("console-text").addEventListener("scroll", () => {
+  // Scrolling up stops following; scrolling back to the end resumes it.
+  const pre = $("console-text");
+  $("console-follow").checked = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 24;
+});
+
 async function refresh() {
   try {
     const response = await fetch("api/v1/overview", { cache: "no-store" });
@@ -458,6 +624,7 @@ async function refresh() {
     const state = data.shutting_down ? "shutting down" : data.ready ? "running" : "not ready";
     $("summary").textContent =
       `Scheduler ${data.version} · Rustic ${data.rustic_version} · ${state} · updated ${new Date().toLocaleTimeString()}`;
+    runLogs = data.run_logs;
     renderJobs(data);
     renderHistory(data);
     renderNextRuns(data);

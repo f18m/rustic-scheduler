@@ -37,6 +37,8 @@ web:
     # password_file: /run/secrets/web_password   # required when auth.enabled is true
   browse:
     enabled: false                 # Snapshots tab: list each job's snapshots and their files
+  run_logs:
+    enabled: true                  # window with Rustic's output of each run (secrets masked)
 
 # Rustic pushes its own rustic_backup_* metrics here after each snapshot.
 pushgateway:
