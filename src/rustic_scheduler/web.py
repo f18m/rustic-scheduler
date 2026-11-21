@@ -5,6 +5,7 @@
   POST /api/v1/jobs/{job}/{operation}/run   start an operation
   GET  /api/v1/jobs/{job}/snapshots         the job's snapshots     (with web.browse)
   GET  /api/v1/jobs/{job}/snapshots/{id}/files?path=/dir            (with web.browse)
+  GET  /api/v1/jobs/{job}/{operation}/output?run=ID&offset=N        a run's output (web.run_logs)
 
 The metrics port stays read-only; this listener is the one that can start
 work, so it is separate, off by default and limited to ``web.operations``.
@@ -19,10 +20,12 @@ Protection (see docs/web.md):
 
 History is the engine's in-memory list: nothing is stored for this interface.
 The snapshot and file listings (browse.py) are read-only and off by default.
+A run's output (runlogs.py) is its existing run log, read-only and on by default.
 """
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import binascii
 import hmac
@@ -36,7 +39,7 @@ from urllib.parse import urlsplit
 
 from aiohttp import web
 
-from . import __version__
+from . import __version__, runlogs
 from .browse import BrowseError, Browser
 from .config import WebConfig
 from .engine import Engine
@@ -91,6 +94,7 @@ def manual_instructions(engine: Engine, job: str) -> dict[str, Any]:
 
 def overview(engine: Engine, config: WebConfig, rustic_version: str) -> dict[str, Any]:
     status = engine.status()
+    reason = runlogs.unavailable(engine, config)
     allowed = set(config.operations)
     jobs = []
     for name, job in status["jobs"].items():
@@ -140,6 +144,7 @@ def overview(engine: Engine, config: WebConfig, rustic_version: str) -> dict[str
         "started_at": status["started_at"],
         "history_size": config.history_size,
         "browse": config.browse.enabled,
+        "run_logs": {"available": reason is None, "message": reason},
         "jobs": jobs,
         "history": [result.to_dict() for result in reversed(engine.history)],
     }
@@ -234,6 +239,43 @@ def create_app(engine: Engine, config: WebConfig, rustic_version: str) -> web.Ap
             return web.json_response({"message": exc.message}, status=exc.status)
         return web.json_response(data)
 
+    async def output(request: web.Request) -> web.Response:
+        """A run's state and its output from a byte offset. Read-only."""
+        job = request.match_info["job"]
+        try:
+            if request.headers.get(CSRF_HEADER) != CSRF_VALUE or not _same_origin(request):
+                raise runlogs.RunLogError(
+                    403, "this request did not come from the scheduler's own page"
+                )
+            try:
+                operation = Operation(request.match_info["operation"])
+            except ValueError:
+                raise runlogs.RunLogError(404, "unknown operation") from None
+            if job not in engine.runtimes:
+                raise runlogs.RunLogError(404, "unknown job")
+            try:
+                offset = int(request.query.get("offset", "0"))
+            except ValueError:
+                offset = -1
+            if offset < 0:
+                raise runlogs.RunLogError(400, "offset must be a whole number of bytes, 0 or more")
+            # The state is decided before reading: a finished run's log is complete.
+            state, result = runlogs.find(engine, job, operation, request.query.get("run") or None)
+        except runlogs.RunLogError as exc:
+            return web.json_response({"message": exc.message}, status=exc.status)
+        log_part = await asyncio.to_thread(runlogs.log_of, engine, config, result, state, offset)
+        skip = engine.last_skips.get((job, operation))
+        return web.json_response(
+            {
+                "job": job,
+                "operation": str(operation),
+                "state": state,
+                "run": result.to_dict() if result is not None else None,
+                "last_skip": skip.to_dict() if skip is not None else None,
+                "log": log_part,
+            }
+        )
+
     async def get_overview(_: web.Request) -> web.Response:
         return web.json_response(overview(engine, config, rustic_version))
 
@@ -260,11 +302,22 @@ def create_app(engine: Engine, config: WebConfig, rustic_version: str) -> web.Ap
             # Not recorded as a skipped run: a second click is not a missed backup.
             refusal = f"{operation} for job {job} is already {state}"
         else:
+            previous = engine.last_results.get((job, operation))
+            requested_at = engine.clock().isoformat()
             accepted, message = engine.trigger(job, operation, Trigger.WEB)
             if accepted:
                 metrics.web_commands.labels("accepted").inc()
                 log.info("job %s: %s requested from the web interface", job, operation)
-                return web.json_response({"accepted": True, "message": message}, status=202)
+                return web.json_response(
+                    {
+                        "accepted": True,
+                        "message": message,
+                        # The page waits for a run other than this one to show its output.
+                        "previous_run_id": previous.run_id if previous else None,
+                        "requested_at": requested_at,
+                    },
+                    status=202,
+                )
             refusal = message
         engine.reject(job, operation, Trigger.WEB, refusal)
         return refuse(409, refusal)
@@ -276,6 +329,7 @@ def create_app(engine: Engine, config: WebConfig, rustic_version: str) -> web.Ap
     app.router.add_post("/api/v1/jobs/{job}/{operation}/run", run)
     app.router.add_get("/api/v1/jobs/{job}/snapshots", browse)
     app.router.add_get("/api/v1/jobs/{job}/snapshots/{snapshot}/files", browse)
+    app.router.add_get("/api/v1/jobs/{job}/{operation}/output", output)
     return app
 
 
@@ -302,11 +356,12 @@ class WebServer:
         auth_status = "password" if (config.auth.enabled and config.auth.password_file) else "none"
         log.info(
             "web interface on http://%s:%s/ (may start: %s; snapshot browsing: %s; "
-            "authentication: %s)",
+            "run output: %s; authentication: %s)",
             config.host,
             config.port,
             ", ".join(config.operations) or "nothing",
             "on" if config.browse.enabled else "off",
+            runlogs.unavailable(self.engine, config) or "on",
             auth_status,
         )
         if config.auth.enabled:
@@ -320,11 +375,16 @@ class WebServer:
                     "web interface: web.auth.password_file is not readable; every request will fail"
                 )
         else:
+            exposed = []
+            if config.browse.enabled:
+                exposed.append(" and list the files in every job's snapshots")
+            if config.run_logs.enabled:
+                exposed.append(" and read Rustic's output of every run")
             log.warning(
                 "web interface: authentication disabled (web.auth.enabled=false), so anyone who "
                 "can reach port %s can start the operations above%s",
                 config.port,
-                " and list the files in every job's snapshots" if config.browse.enabled else "",
+                "".join(exposed),
             )
 
     async def stop(self) -> None:

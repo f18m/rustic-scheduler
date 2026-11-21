@@ -18,8 +18,15 @@ class Element {
     };
   }
   get rows() { return this.children; }
-  append(...children) { this.children.push(...children); }
-  replaceChildren(...children) { this.children = children; }
+  get firstChild() { return this.children[0]; }
+  append(...children) {
+    for (const child of children) if (child instanceof Element) child.parent = this;
+    this.children.push(...children);
+  }
+  replaceChildren(...children) { this.children = []; this.append(...children); }
+  remove() { this.parent.children.splice(this.parent.children.indexOf(this), 1); }
+  showModal() { this.open = true; }
+  close() { this.open = false; if (this.events.close) this.events.close(); }
   addEventListener(name, fn) { this.events[name] = fn; }
   setAttribute(name, value) { this.attributes[name] = value; }
   focus() { this.focused = true; }
@@ -34,13 +41,21 @@ function getElementById(id) {
   }
   return elements.get(id);
 }
+const timers = [];
 const context = vm.createContext({
-  document: { getElementById, createElement: (tag) => new Element(tag) },
+  document: {
+    getElementById,
+    createElement: (tag) => new Element(tag),
+    createTextNode: (text) => Object.assign(new Element("#text"), { textContent: text }),
+  },
   window: { addEventListener() {} },
   location: { hash: "#next" },
   history: { replaceState(_state, _title, hash) { context.location.hash = hash; } },
   fetch: () => new Promise(() => {}),
   setInterval() {},
+  setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
+  clearTimeout() {},
+  URLSearchParams,
 });
 const source = fs.readFileSync(path.join(__dirname, "../../src/rustic_scheduler/webui/app.js"), "utf8");
 vm.runInContext(source, context);
@@ -128,6 +143,55 @@ vm.runInContext("refresh()", context).then(async () => {
   snapshots.length = 0;
   await vm.runInContext("loadSnapshots(false)", context);
   assert.equal(snapshotBody.children[0].children[0].colSpan, 9);
+
+  // ------------------------------------------------ the run output window
+  const settle = async () => { for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r)); };
+  const run = (extra) => ({ run_id: "NEW", trigger: "web", started_at: "2026-01-03T00:00:00Z", ...extra });
+  const replies = [
+    // Still the previous run: keep waiting.
+    { state: "finished", run: run({ run_id: "OLD", outcome: "succeeded" }), last_skip: null,
+      log: { available: true, offset: 0, next_offset: 5, text: "old\n", more: false, skipped: 0 } },
+    { state: "running", run: run({ outcome: "unknown" }), last_skip: null,
+      log: { available: true, offset: 0, next_offset: 25, text: "$ rustic backup\n<b>line</b>\n", more: true, skipped: 0 } },
+    { state: "finished", run: run({ outcome: "failed", finished_at: "2026-01-03T00:00:03Z", duration_seconds: 3,
+      attempts: 2, dry_run: false, detail: "exit status 1" }), last_skip: null,
+      log: { available: true, offset: 25, next_offset: 60, text: "[rustic-scheduler] result: failed\n", more: false, skipped: 0 } },
+  ];
+  requests.length = 0;
+  context.fetch = async (url) => {
+    requests.push(url);
+    const data = replies.shift();
+    return { ok: true, json: async () => data };
+  };
+  vm.runInContext('openConsole("docs", "backup", { previous: "OLD", requestedAt: "2026-01-03T00:00:00Z" })', context);
+  await settle();
+  assert.equal(getElementById("console").open, true);
+  assert.equal(getElementById("console-title").textContent, "backup · docs");
+  assert.equal(getElementById("console-status").textContent, "Waiting for the run to start…");
+  assert.equal(getElementById("console-text").children.length, 0);
+  timers.shift().fn();
+  await settle();
+  const pre = getElementById("console-text");
+  assert.deepEqual(pre.children.map((n) => [n.tag, n.className || "", n.textContent]), [
+    ["span", "note", "$ rustic backup\n"],
+    ["#text", "", "<b>line</b>\n"],
+  ]);
+  assert.equal(getElementById("console-state").children[0].textContent, "running");
+  // More was already there: asked again at once, for the same run, from the new offset.
+  assert.equal(timers[0].ms, 0);
+  timers.shift().fn();
+  await settle();
+  assert.deepEqual(requests, [
+    "api/v1/jobs/docs/backup/output?offset=0",
+    "api/v1/jobs/docs/backup/output?offset=0",
+    "api/v1/jobs/docs/backup/output?offset=25&run=NEW",
+  ]);
+  assert.equal(pre.children.at(-1).textContent, "[rustic-scheduler] result: failed\n");
+  assert.equal(getElementById("console-state").children[0].textContent, "failed");
+  assert.match(getElementById("console-status").textContent, /2 attempts · exit status 1$/);
+  assert.equal(timers.length, 0, "a finished run is not asked for again");
+  getElementById("console").close();
+  assert.equal(getElementById("console").open, false);
 }).catch((error) => {
   console.error(error);
   process.exitCode = 1;

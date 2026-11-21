@@ -80,7 +80,7 @@
           <thead>
             <tr>
               <th>Finished</th><th>Job</th><th>Operation</th><th>Outcome</th>
-              <th>Trigger</th><th>Duration</th><th>Detail</th>
+              <th>Trigger</th><th>Duration</th><th>Detail</th><th>Output</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -141,6 +141,20 @@
   <footer>
     <a href="https://github.com/f18m/rustic-scheduler" target="_blank" rel="noopener noreferrer">rustic-scheduler on GitHub</a>
   </footer>
+  <dialog id="console" aria-labelledby="console-title">
+    <div class="console-head">
+      <h3 id="console-title"></h3>
+      <span id="console-state"></span>
+      <button type="button" id="console-close" class="plain" aria-label="Close">Close</button>
+    </div>
+    <p id="console-status" class="small" role="status"></p>
+    <pre id="console-text" class="terminal" tabindex="0" aria-label="Rustic's output"></pre>
+    <div class="console-foot">
+      <label class="small"><input type="checkbox" id="console-follow" checked> Follow the output</label>
+      <button type="button" id="console-copy" class="plain">Copy</button>
+      <span class="small">Closing this window does not stop the run.</span>
+    </div>
+  </dialog>
   <script src="app.js"></script>
 </body>
 </html>

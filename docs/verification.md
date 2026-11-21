@@ -169,6 +169,28 @@ detected.
 - With Node.js and a simulated DOM: snapshot timestamps are plain text and each Browse
   button selects its snapshot and requests its initial directory; the empty list spans all
   columns. This is not a browser test.
+- Run output, with the real binary (integration test): during a backup of about 190 MB
+  started through the run route, the output route already returns Rustic's log lines while
+  the run is still `running`; the text received in pieces equals the run log, starts with
+  the command line, ends with the result and holds no password.
+- Run output, with the scripted stand-in and plain processes (unit tests): every process
+  of a run appends to one log (forget's preview and removal, each retry attempt), with the
+  scheduler's lines, file mode 0600; offsets only grow; the run started by a request is told
+  apart from the previous one; queued and skipped requests; secrets masked and terminal
+  codes removed; a long log opened at its end in whole lines; a line still being written
+  held back; requests without the page's header, unknown jobs, operations and runs, bad
+  offsets and ids that look like paths refused; switched off by `web.run_logs.enabled` or
+  `run_logs_per_operation: 0`; a pruned log reported as no longer kept.
+- Run output, with Node.js and a simulated DOM: after "Run now" the window waits for a run
+  other than the previous one, appends output as text (markup shown literally), highlights
+  the scheduler's lines, asks again at once when more is waiting, shows the outcome and
+  stops asking once the run has finished. This is not a browser test.
+- Run output, one manual run not part of the test suite, in headless Chrome against a
+  throwaway local repository and the real binary: "Run now" opens the window, which shows
+  Rustic's lines while the backup is running and the outcome when it ends; Esc closes it;
+  Output in Recent runs reopens the finished run; light and dark; a 390 px wide window
+  without horizontal scrolling. Copy, and the Follow checkbox while scrolling, were not
+  exercised.
 - One manual run of the tabbed page, not part of the test suite, in headless Chrome against
   a local repository made by the real binary: switching tabs, listing two jobs' snapshots,
   opening a snapshot, entering a directory and going back up by the path, a file name
