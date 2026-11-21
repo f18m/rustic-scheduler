@@ -124,6 +124,34 @@ def test_job_names_and_duplicate_labels(base):
     assert "already used by job 'docs'" in problems(raw)
 
 
+@pytest.mark.parametrize(
+    ("first", "second", "clash"),
+    [
+        (None, None, True),
+        ("h1", "h1", True),
+        (None, "h1", True),  # the job without a host also selects h1's snapshots
+        ("h1", None, True),
+        ("h1", "h2", False),
+    ],
+)
+def test_a_shared_label_needs_distinct_hosts_on_both_jobs(base, first, second, clash):
+    raw = base()
+    raw["jobs"] = {
+        "one": {"profiles": ["repo"], "sources": ["/a"], "label": "shared", "host": first},
+        "two": {"profiles": ["repo"], "sources": ["/b"], "label": "shared", "host": second},
+    }
+    for job in raw["jobs"].values():
+        if job["host"] is None:
+            del job["host"]
+    try:
+        parse_config(raw)
+        text = ""
+    except ConfigError as error:
+        text = "\n".join(error.problems)
+    assert ("jobs.two: label 'shared' is already used by job 'one'" in text) is clash
+    assert ("without `host`" in text) is (clash and first != second)
+
+
 def test_all_problems_are_reported_together(base):
     raw = base({"schedule": {"days": ["moon"], "times": ["02:30"]}, "bogus": 1})
     raw["mqtt"] = {"enabled": True, "password_file": "/nonexistent"}

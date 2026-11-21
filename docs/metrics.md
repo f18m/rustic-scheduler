@@ -176,7 +176,8 @@ job.
 Possible conflicts:
 
 - Two jobs with the same label, host, paths and tags would share a group and overwrite each
-  other. The scheduler refuses two jobs with the same label and host.
+  other. The scheduler refuses two jobs with the same label unless both set `host`, to
+  different values.
 - A profile `metrics-labels` entry named like a grouping label replaces Rustic's value.
 - The scheduler's metrics never clash: different prefix, and `backup_job` instead of `job`.
 

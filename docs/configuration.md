@@ -121,7 +121,9 @@ topics and file names.
 | `allow_init` | `false` | Accept `init = true` in the profiles (Rustic may create the repository). |
 | `env` | `{}` | Extra environment for this job's Rustic processes. Not for secrets. |
 
-Label and host together must be unique among jobs.
+Label and host together must be unique among jobs. Two jobs may share a label only when
+both set `host`, to different values: a job without `host` selects the label's snapshots of
+every host, so its forget would also act on the other job's snapshots.
 
 ### `schedule` (also under `snapshots`, `forget`, `prune`, `check`)
 
