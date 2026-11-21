@@ -27,7 +27,6 @@ import base64
 import binascii
 import hmac
 import logging
-import os
 import shlex
 from collections.abc import Awaitable, Callable
 from importlib import resources
@@ -145,11 +144,26 @@ def overview(engine: Engine, config: WebConfig, rustic_version: str) -> dict[str
     }
 
 
+class PasswordUnavailable(Exception):
+    """The password file is set but gives no usable password."""
+
+
 def _password(config: WebConfig) -> str | None:
-    """The expected password, read on every request so a rotated secret is picked up."""
+    """The expected password, read on every request so a rotated secret is picked up.
+
+    ``None`` only when authentication is off. A file that cannot be read, or that
+    holds no password, raises ``PasswordUnavailable``: neither may mean "no password",
+    and an empty one would let in anyone who sends the username with nothing after it.
+    """
     if not config.auth.enabled or config.auth.password_file is None:
         return None
-    password = config.auth.password_file.read_text(encoding="utf-8").strip()
+    try:
+        password = config.auth.password_file.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError) as exc:
+        detail = getattr(exc, "strerror", None) or exc
+        raise PasswordUnavailable(f"cannot read web.auth.password_file: {detail}") from exc
+    if not password:
+        raise PasswordUnavailable("web.auth.password_file is empty")
     REDACTOR.register([password])
     return password
 
@@ -187,11 +201,12 @@ def create_app(engine: Engine, config: WebConfig, rustic_version: str) -> web.Ap
         response: web.StreamResponse
         try:
             password = _password(config)
-        except OSError as exc:
-            # Never fall back to "no password" when the secret cannot be read.
-            log.error("web interface: cannot read web.auth.password_file: %s", exc.strerror or exc)
+        except PasswordUnavailable as exc:
+            # Never fall back to "no password" when the secret is missing.
+            log.error("web interface: %s", exc)
             response = web.json_response(
-                {"message": "the password file cannot be read; see the scheduler log"}, status=503
+                {"message": "the password file cannot be used; see the scheduler log"},
+                status=503,
             )
         else:
             if password is not None and not _authorised(request, config.auth.username, password):
@@ -315,10 +330,11 @@ class WebServer:
                     "web interface: web.auth.enabled is true but no web.auth.password_file; "
                     "initialization should have failed"
                 )
-            elif not os.access(config.auth.password_file, os.R_OK):
-                log.error(
-                    "web interface: web.auth.password_file is not readable; every request will fail"
-                )
+            else:
+                try:
+                    _password(config)
+                except PasswordUnavailable as exc:
+                    log.error("web interface: %s; every request will fail", exc)
         else:
             log.warning(
                 "web interface: authentication disabled (web.auth.enabled=false), so anyone who "
