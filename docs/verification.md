@@ -52,6 +52,8 @@ skipped.
   their summed sizes on disk. The scheduler exports them as the latest snapshot's size and
   file count. Not verified: snapshots written by restic or other tools, hard links, sparse
   files and special files.
+- `backup --time` sets the snapshot time, so two snapshots can have exactly the same time;
+  snapshot telemetry succeeds on such a listing and reports both.
 - Missing source, wrong password, missing repository and invalid profile all exit non-zero.
 - `check --read-data` exits non-zero on a damaged pack file.
 

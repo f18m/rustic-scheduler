@@ -359,6 +359,24 @@ async def test_legacy_web_telemetry_is_refreshed_to_match_the_snapshot_browser(r
         await restarted.shutdown()
 
 
+async def test_snapshot_telemetry_accepts_snapshots_with_the_same_time(real):
+    """`backup --time` gives two real snapshots the same time; telemetry must still succeed."""
+    job = real.job(
+        snapshots={"enabled": True}, backup={"extra_args": ["--time", "2026-01-21 14:15:23+0000"]}
+    )
+    engine = await real.engine(real.config({"docs": job}))
+    await run(engine)
+    (real.source / "later.txt").write_text("changed")
+    await run(engine)
+    own = real.snapshots("docs")
+    assert len(own) == 2 and own[0]["time"] == own[1]["time"]
+    telemetry = engine.last_results[("docs", Operation.SNAPSHOTS)]
+    assert telemetry.outcome == Outcome.SUCCEEDED, telemetry.detail
+    assert telemetry.data["count"] == 2
+    assert telemetry.data["latest"] == telemetry.data["oldest"]
+    assert any(s["id"].startswith(telemetry.data["latest_id"]) for s in own)
+
+
 async def test_snapshot_telemetry_is_per_job_on_a_shared_repository(real):
     engine = await real.engine(real.config(shared_repo_jobs(real)))
     await run(engine, "one")
