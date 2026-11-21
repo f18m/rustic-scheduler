@@ -460,6 +460,22 @@ async def test_restart_refreshes_only_legacy_snapshot_telemetry(
         await again.shutdown()
 
 
+async def test_snapshot_telemetry_accepts_snapshots_with_the_same_time(sandbox):
+    # Nanoseconds are cut to microseconds, so these two times become equal.
+    listing = snapshots_json(
+        snapshot("docs", "2026-01-03T10:00:00.123456001+01:00", "a"),
+        snapshot("docs", "2026-01-03T10:00:00.123456002+01:00", "b"),
+        snapshot("docs", "2026-01-01T10:00:00+01:00", "c"),
+    )
+    sandbox.write_plan({"snapshots": {"stdout": [listing]}})
+    engine = await sandbox.engine(sandbox.config({"docs": full_job()}))
+    result = await run(engine, operation=Operation.SNAPSHOTS)
+    assert result.outcome == Outcome.SUCCEEDED, result.detail
+    assert result.data["count"] == 3
+    assert result.data["latest_id"] in ("a" * 8, "b" * 8)
+    assert result.data["oldest"] == datetime(2026, 1, 1, 9, 0, tzinfo=UTC).timestamp()
+
+
 async def test_snapshot_telemetry_keeps_a_zero_file_count(sandbox):
     empty = snapshot("docs", "2026-01-03T10:00:00Z")
     empty["summary"]["total_files_processed"] = 0

@@ -165,7 +165,9 @@ def summarise_snapshots(payload: Any, runtime: JobRuntime) -> dict[str, Any]:
     foreign = [s for s in snapshots if not _in_scope(s, runtime)]
     if foreign:
         raise LookupError(f"{len(foreign)} snapshot(s) outside the job's scope were returned")
-    times = sorted((parse_time(s["time"]), s) for s in snapshots)
+    # Sorted by time only: snapshots can share a timestamp (`rustic copy` keeps the
+    # original time, `backup --time` sets one), and the dicts themselves do not compare.
+    times = sorted(((parse_time(s["time"]), s) for s in snapshots), key=lambda pair: pair[0])
     data: dict[str, Any] = {"count": len(snapshots), "groups": len(payload)}
     if times:
         latest_time, latest = times[-1]
