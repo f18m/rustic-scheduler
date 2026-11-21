@@ -44,6 +44,10 @@ skipped.
 - Several `-P` profiles given as absolute paths are merged by Rustic; the first listed wins
   for a value set in more than one.
 - `rustic show-config` returns the merged configuration and reflects the environment.
+- `rustic show-config` reports `[repository.options]` such as `timeout` and `retry`; two
+  profiles for one repository that differ only there, or only by a trailing slash, get the
+  same repository lock. Not verified with real remote backends: which option names each
+  OpenDAL service uses for its location.
 - A command-line `--label` or `--tag` replaces the profile's value.
 - `--filter-label` on `snapshots` and `forget` restricts them to that label.
 - Every snapshot in `snapshots --json` carries a `summary` whose `total_files_processed` and

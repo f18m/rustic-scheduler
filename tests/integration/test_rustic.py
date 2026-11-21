@@ -265,6 +265,23 @@ async def test_repository_identity_comes_from_rustic(real):
     assert runtimes["one"].lock_key == runtimes["two"].lock_key != runtimes["three"].lock_key
 
 
+async def test_backend_tuning_options_do_not_split_the_repository_lock(real):
+    """Rustic reports backend options; ones that only tune the connection are not identity."""
+    for name, options in (("tuned", 'timeout = "10min"\nretry = "5"'), ("slashed", "")):
+        repository = f"{real.repo}/" if name == "slashed" else str(real.repo)
+        real.profile(
+            name,
+            f'[repository]\nrepository = "{repository}"\npassword-file = "{real.password_file}"\n'
+            f"[repository.options]\n{options}\n",
+        )
+    jobs = {"one": real.job(), "two": real.job(profiles=["tuned"])}
+    jobs["three"] = real.job(profiles=["slashed"])
+    runtimes, _, _ = await prepare(real.config(jobs))
+    tuned = runtimes["two"].merged
+    assert runtimes["one"].lock_key == runtimes["two"].lock_key == runtimes["three"].lock_key
+    assert tuned.repository == str(real.repo)
+
+
 # ------------------------------------------------- telemetry, forget, prune
 
 

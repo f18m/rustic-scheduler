@@ -24,9 +24,15 @@ quickly and schedules never drift.
 ## Concurrency
 
 **One operation at a time per repository.** The repository is identified from what Rustic
-itself reports for the job's merged profiles (`repository`, `repo-hot` and the non-secret
-backend options), so two jobs that reach the same repository through different profile files
-still share one lock. Override it with `repository_lock` if you need to.
+itself reports for the job's merged profiles: `repository`, `repo-hot`, and the backend
+options that say where the repository is (`bucket`, `container`, `root`, `share_name`, in
+`options`, `options-hot` and `options-cold`). Other backend options, such as `timeout`,
+`retry`, `connections`, `throttle`, `region` or a storage class, are ignored, and so are
+slashes that do not change the location (`/repo` and `/repo/`). Two jobs that reach the same
+repository through different profile files therefore still share one lock, even when they
+tune the connection differently. Two different repositories that this does not tell apart
+(for example the same bucket name on two S3-compatible servers) share a lock too: they run
+one at a time, which is slower but safe. Set `repository_lock` to choose the lock yourself.
 
 - Operations on the same repository queue in arrival order.
 - A run that has waited `repository_wait_timeout` is skipped (`repository_busy`).

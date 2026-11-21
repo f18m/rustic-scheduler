@@ -19,7 +19,14 @@ from typing import Any
 
 from .config import Config, JobConfig
 
-_SECRETISH = re.compile(r"(?i)password|passwd|secret|token|key")
+#: Backend options that say *where* a repository is. Everything else in the options
+#: (timeouts, retries, connection limits, throttling, storage classes, hooks,
+#: credentials) is how Rustic talks to it, and two profiles for the same repository
+#: may well differ there. Only these keys go into the lock identity, so that such
+#: differences never give one repository two locks. A location key missing from
+#: this list can only make two different repositories share a lock, which costs
+#: parallelism but is safe.
+_LOCATION_OPTIONS = frozenset({"bucket", "container", "root", "share_name"})
 
 
 class ProfileError(Exception):
@@ -49,17 +56,30 @@ def _get(raw: dict[str, Any], *path: str) -> Any:
 
 
 def repository_lock_key(raw: dict[str, Any]) -> str:
-    """Stable identifier of the repository a merged configuration points at."""
+    """Stable identifier of the repository a merged configuration points at.
+
+    Built from the repository URLs and the location options only (see
+    ``_LOCATION_OPTIONS``). Slashes that do not change the location are ignored:
+    `/repo` and `/repo/` are one repository, and so are an option `root` of `/`,
+    `""` or none at all, and `root` values `x` and `/x/`.
+    """
     repository = _get(raw, "repository") or {}
-    identity = {
-        "repository": repository.get("repository"),
-        "repo-hot": repository.get("repo-hot"),
+
+    def url(value: Any) -> Any:
+        return value.rstrip("/") or "/" if isinstance(value, str) else value
+
+    identity: dict[str, Any] = {
+        "repository": url(repository.get("repository")),
+        "repo-hot": url(repository.get("repo-hot")),
     }
     for section in ("options", "options-hot", "options-cold"):
         options = repository.get(section) or {}
-        identity[section] = {
-            key: value for key, value in sorted(options.items()) if not _SECRETISH.search(key)
+        found = {
+            key: str(value).strip("/")
+            for key, value in options.items()
+            if key in _LOCATION_OPTIONS and value is not None
         }
+        identity[section] = {key: value for key, value in sorted(found.items()) if value}
     digest = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
     return f"repo-{digest[:16]}"
 

@@ -197,6 +197,29 @@ def test_lock_key_identifies_the_repository_not_the_secrets():
     )
 
 
+def test_lock_key_ignores_options_that_do_not_locate_the_repository():
+    def key(repository: str = "opendal:s3", **options: object) -> str:
+        return repository_lock_key({"repository": {"repository": repository, "options": options}})
+
+    base = key(bucket="b", root="/x")
+    # How Rustic talks to the repository is not which repository it is.
+    assert base == key(bucket="b", root="/x", timeout="10min", retry="5", connections="4")
+    assert base == key(bucket="b", root="/x", throttle="10kB,10MB", region="eu-west-1")
+    assert base == key(bucket="b", root="/x", default_storage_class="DEEP_ARCHIVE")
+    # Slashes that do not change the location.
+    assert base == key(bucket="b", root="x/")
+    assert key(bucket="b") == key(bucket="b", root="/") == key(bucket="b", root="")
+    assert key("/srv/repo") == key("/srv/repo/")
+    # Location options and the URL still tell repositories apart.
+    assert base != key(bucket="c", root="/x")
+    assert base != key(bucket="b", root="/x/y")
+    assert key("/srv/repo") != key("/srv/other")
+    cold = {"repository": "opendal:s3", "options-cold": {"bucket": "cold"}}
+    assert repository_lock_key({"repository": cold}) != repository_lock_key(
+        {"repository": cold | {"options-cold": {"bucket": "colder"}}}
+    )
+
+
 def test_explicit_lock_name_wins(build):
     _, runtime, _ = build({"repository_lock": "shared-nas"})
     assert runtime.lock_key == "shared-nas"
