@@ -347,6 +347,23 @@ async def test_an_unreadable_password_file_never_means_no_password(site, sandbox
     assert sandbox.journal() == []
 
 
+@pytest.mark.parametrize("content", ["", "\n", "   \n"])
+async def test_an_empty_password_file_never_means_an_empty_password(site, sandbox, content):
+    secret = sandbox.root / "web_password"
+    secret.write_text("pw-12345")
+    _, session = await site(password_file=str(secret), username="me")
+    secret.write_text(content)  # e.g. a secret mount that came up empty
+    for headers in (basic("me", ""), {}):
+        async with session.get("/api/v1/overview", headers=headers) as response:
+            assert response.status == 503
+        async with session.post("/api/v1/jobs/docs/backup/run", headers=SENT | headers) as r:
+            assert r.status == 503
+    assert sandbox.journal() == []
+    secret.write_text("pw-12345")
+    async with session.get("/api/v1/overview", headers=basic("me", "pw-12345")) as response:
+        assert response.status == 200
+
+
 # ------------------------------------------------------- manual instructions
 
 
