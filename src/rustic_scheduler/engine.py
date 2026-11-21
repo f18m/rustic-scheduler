@@ -39,7 +39,7 @@ from .mqtt import MqttPublisher
 from .notify import Notifier
 from .pushgateway import PushgatewayClient
 from .redact import REDACTOR
-from .runner import NON_TERMINAL_HINT, ProcessResult, run_process
+from .runner import NON_TERMINAL_HINT, ProcessResult, append_log_note, run_process
 from .schedule import Schedule
 from .state import StateStore
 
@@ -643,6 +643,8 @@ class Engine:
             attempts = cfg.retries + 1
             for number in range(1, attempts + 1):
                 result.attempts = number
+                if number > 1:
+                    append_log_note(log_file, f"attempt {number} of {attempts}")
                 attempt = await self._execute(runtime, operation, fd, log_file)
                 retry = (
                     attempt.outcome == Outcome.FAILED
@@ -652,6 +654,9 @@ class Engine:
                 )
                 if not retry:
                     break
+                append_log_note(
+                    log_file, f"failed: {attempt.detail}; retrying in {cfg.retry_delay}"
+                )
                 log.warning(
                     "job %s: %s failed (attempt %d of %d): %s; retrying in %s",
                     runtime.name,
@@ -681,6 +686,7 @@ class Engine:
             result.dry_run = attempt.dry_run
             result.data = attempt.data
             result.finished_at = self.clock()
+            append_log_note(log_file, f"result: {result.summary()}")
             self._finish(result)
         return result
 
@@ -851,6 +857,7 @@ class Engine:
     async def _forget(self, runtime: JobRuntime, fd: int | None, log_file: Any) -> Attempt:
         """Preview, verify the scope and limits, and only then remove snapshots."""
         forget = runtime.job.forget
+        append_log_note(log_file, "preview: what forget would remove (nothing is removed yet)")
         preview = await self._process(
             runtime,
             commands.forget_command(runtime, dry_run=True),
@@ -899,6 +906,11 @@ class Engine:
             return Attempt(Outcome.SUCCEEDED, exit_code=preview.exit_code, dry_run=True, data=plan)
         if plan["removed"] == 0 and not forget.prune:
             return Attempt(Outcome.SUCCEEDED, exit_code=preview.exit_code, data=plan)
+        append_log_note(
+            log_file,
+            f"the preview passed the checks; removing {plan['removed']} snapshots, "
+            f"keeping {plan['kept']}",
+        )
         real = await self._process(
             runtime,
             commands.forget_command(runtime, dry_run=False),
@@ -1093,6 +1105,7 @@ class Engine:
                         current.started_at.isoformat() if current and current.started_at else None
                     ),
                     "trigger": str(current.trigger) if current else None,
+                    "run_id": current.run_id if current else None,
                     "next_run": entry.next_fire.isoformat() if entry else None,
                     "schedule": entry.schedule.describe() if entry else None,
                     "progress": progress.to_dict() if progress else None,

@@ -15,6 +15,7 @@ import contextlib
 import json
 import logging
 import os
+import shlex
 import signal
 from collections import deque
 from collections.abc import Callable
@@ -37,6 +38,8 @@ _TAIL_LINES = 40
 _MAX_CAPTURE = 512 * 1024 * 1024
 #: Longer output lines are shortened in logs.
 _MAX_LOG_LINE = 4000
+#: Prefix of the lines the scheduler itself adds to a run log.
+LOG_NOTE = "[rustic-scheduler]"
 
 
 @dataclass
@@ -79,6 +82,37 @@ def _terminate(process: asyncio.subprocess.Process, sig: int) -> None:
         os.killpg(process.pid, sig)
 
 
+def _open_log(path: Path) -> IO[str]:
+    """Open a run log for appending, readable by the owner only.
+
+    Appending, not truncating: one operation may start several processes (forget's
+    preview and removal, retries), and all of their output belongs in its log.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    os.fchmod(fd, 0o600)
+    return os.fdopen(fd, "a", encoding="utf-8")
+
+
+def append_log_note(log_file: Path | None, text: str) -> None:
+    """Add a line of the scheduler's own to a run log. Never raises."""
+    if log_file is None:
+        return
+    try:
+        with _open_log(log_file) as sink:
+            sink.write(f"{LOG_NOTE} {REDACTOR(text)}\n")
+    except OSError as exc:
+        log.warning("cannot write run log %s: %s", log_file, exc.strerror or exc)
+
+
+def _outcome_note(result: ProcessResult) -> str:
+    if result.timed_out:
+        return "the time limit expired; the process was stopped"
+    if result.stopped_by_scheduler:
+        return "the scheduler stopped the process"
+    return f"the process exited with status {result.exit_code}"
+
+
 async def run_process(
     argv: list[str],
     env: dict[str, str],
@@ -101,9 +135,9 @@ async def run_process(
     sink: IO[str] | None = None
     if log_file is not None:
         try:
-            log_file.parent.mkdir(parents=True, exist_ok=True)
-            sink = log_file.open("w", encoding="utf-8")
-            os.chmod(log_file, 0o600)
+            sink = _open_log(log_file)
+            sink.write(f"$ {REDACTOR(shlex.join(argv))}\n")
+            sink.flush()
         except OSError as exc:
             log.warning("cannot write run log %s: %s", log_file, exc.strerror or exc)
     tail: deque[str] = deque(maxlen=_TAIL_LINES)
@@ -143,7 +177,7 @@ async def run_process(
     except OSError as exc:
         result.spawn_error = f"{argv[0]}: {exc.strerror or exc}"
         if sink is not None:
-            sink.write(f"could not start: {result.spawn_error}\n")
+            sink.write(f"{LOG_NOTE} could not start: {result.spawn_error}\n")
             sink.close()
         return result
 
@@ -222,8 +256,10 @@ async def run_process(
             readers.cancel()
         except Exception:
             log.exception("reading output of %s failed", name)
+        result.exit_code = process.returncode
         if sink is not None:
+            with contextlib.suppress(OSError):
+                sink.write(f"{LOG_NOTE} {_outcome_note(result)}\n")
             sink.close()
-    result.exit_code = process.returncode
     result.stderr_tail = list(tail)
     return result
