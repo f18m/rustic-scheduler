@@ -2,7 +2,7 @@ import asyncio
 import sys
 
 from rustic_scheduler.redact import REDACTOR, RedactingFilter, Redactor
-from rustic_scheduler.runner import run_process
+from rustic_scheduler.runner import append_log_note, run_process
 
 PY = sys.executable
 
@@ -27,10 +27,32 @@ async def test_ndjson_messages_and_plain_lines_are_separated(tmp_path):
         == [m["message_type"] for m in seen]
     )
     assert result.stderr_tail == ["[WARN] careful"]
-    text = log_file.read_text()
+    command, text = log_file.read_text().split("\n", 1)
+    assert command.startswith(f"$ {PY} -c ")
     assert "plain text" in text and "[1,2]" in text and "summary" in text and "careful" in text
     assert "bytes_done" not in text  # progress chatter stays out of the run log
+    assert text.endswith("[rustic-scheduler] the process exited with status 0\n")
     assert oct(log_file.stat().st_mode & 0o777) == "0o600"
+
+
+async def test_several_processes_append_to_one_run_log(tmp_path):
+    log_file = tmp_path / "run.log"
+    log_file.write_text("")
+    log_file.chmod(0o644)
+    await run("print('first')", log_file=log_file)
+    append_log_note(log_file, "between password=hunter2")
+    await run(
+        "import time;print('second',flush=True);time.sleep(5)", log_file=log_file, timeout=0.3
+    )
+    lines = log_file.read_text().splitlines()
+    assert lines[1:3] == ["first", "[rustic-scheduler] the process exited with status 0"]
+    assert lines[3] == "[rustic-scheduler] between password=[REDACTED]"
+    assert lines[4].startswith("$ ") and lines[5] == "second"
+    assert lines[6] == "[rustic-scheduler] the time limit expired; the process was stopped"
+    assert oct(log_file.stat().st_mode & 0o777) == "0o600"
+    append_log_note(None, "ignored")  # no run log: nothing happens
+    append_log_note(tmp_path / "missing" / "dir" / "x.log", "creates it")
+    assert (tmp_path / "missing" / "dir" / "x.log").exists()
 
 
 async def test_very_long_lines_do_not_break_parsing():
