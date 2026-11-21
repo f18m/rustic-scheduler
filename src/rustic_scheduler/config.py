@@ -567,7 +567,8 @@ def _format_validation_error(error: ValidationError) -> list[str]:
 
 def _semantic_problems(config: Config) -> list[str]:
     problems: list[str] = []
-    labels: dict[tuple[str, str | None], str] = {}
+    #: label -> [(host, job)] of the jobs seen so far
+    labels: dict[str, list[tuple[str | None, str]]] = {}
     for name, job in config.jobs.items():
         where = f"jobs.{name}"
         if not NAME_RE.match(name):
@@ -616,15 +617,26 @@ def _semantic_problems(config: Config) -> list[str]:
                 f"list {operation} in mqtt.commands.operations or web.operations to run it "
                 "on request only"
             )
-        # Two jobs with the same label and host could not be told apart, so
-        # one job's retention would act on the other's snapshots.
-        identity = (config.label_of(name), job.host)
-        if identity in labels:
-            problems.append(
-                f"{where}: label {identity[0]!r} is already used by job {labels[identity]!r}; "
-                "each job needs its own label so that telemetry and forget stay separate"
-            )
-        labels[identity] = name
+        # A job's snapshot scope is its label plus, when set, its host. A job
+        # without a host matches that label on every host, so it overlaps any
+        # other job with the label; two jobs with the same label and host
+        # cannot be told apart. Either way one job's retention would act on
+        # the other's snapshots.
+        label = config.label_of(name)
+        for host, other in labels.get(label, []):
+            if job.host is None or host is None or job.host == host:
+                problems.append(
+                    f"{where}: label {label!r} is already used by job {other!r}"
+                    + (
+                        ""
+                        if job.host == host
+                        else " and a job without `host` covers that label on every host"
+                    )
+                    + "; each job needs its own label (or both jobs a different `host`) "
+                    "so that telemetry and forget stay separate"
+                )
+                break
+        labels.setdefault(label, []).append((job.host, name))
     if not config.mqtt.enabled:
         for feature, on in (
             ("commands", config.mqtt.commands.enabled),

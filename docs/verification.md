@@ -208,7 +208,8 @@ one directory, on a slow or remote repository, or in a repository with cold stor
 ## Verified with a scripted stand-in for Rustic
 
 The unit tests in `tests/unit/` (235 tests) cover logic that needs precise control over
-timing and failure: configuration validation and error messages; schedule arithmetic across
+timing and failure: configuration validation and error messages, including refusing a
+label shared by two jobs unless both set different hosts; schedule arithmetic across
 time zones and both DST transitions; command construction; profile conflict analysis; the
 process runner (timeouts, SIGKILL escalation, process groups, long lines); every outcome and
 reason; retries; after-backup ordering and its skip rules; all forget safeguards; overlap,
