@@ -3,6 +3,7 @@
 import asyncio
 import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -142,6 +143,26 @@ async def test_retries_only_after_plain_failures(sandbox):
     assert (
         metric(engine.metrics, "rustic_scheduler_operation_runs_total", runs) == 1
     )  # one run, not three
+
+
+async def test_every_attempt_stays_in_the_run_log(sandbox):
+    sandbox.write_plan(
+        {"backup": [{"exit": 1, "stderr": ["error: first try"]}, OK_BACKUP | {"stderr": ["ok"]}]}
+    )
+    job = {"profiles": ["repo"], "sources": ["/d"], "backup": {"retries": 2, "retry_delay": 0.05}}
+    result = await run(await sandbox.engine(sandbox.config({"docs": job})))
+    assert result.attempts == 2 and result.run_id is not None
+    assert Path(result.log_file).name == f"{result.run_id}-backup.log"
+    lines = Path(result.log_file).read_text().splitlines()
+    notes = [line for line in lines if line.startswith(("$ ", "[rustic-scheduler]"))]
+    assert len(notes) == 7
+    assert notes[0].startswith("$ ") and notes[4].startswith("$ ")
+    assert notes[1] == "[rustic-scheduler] the process exited with status 1"
+    assert notes[2].startswith("[rustic-scheduler] failed: ") and "retrying in" in notes[2]
+    assert notes[3] == "[rustic-scheduler] attempt 2 of 3"
+    assert notes[5] == "[rustic-scheduler] the process exited with status 0"
+    assert notes[6] == "[rustic-scheduler] result: succeeded"
+    assert "error: first try" in lines and "ok" in lines
 
 
 async def test_no_retry_after_timeout(sandbox):
@@ -341,6 +362,28 @@ async def test_forget_with_nothing_to_remove_does_not_run_for_real(sandbox):
     )
     assert result.outcome == Outcome.SUCCEEDED and result.data["removed"] == 0
     assert len(sandbox.journal()) == 1
+
+
+async def test_the_forget_log_holds_the_preview_and_the_removal(sandbox):
+    plan = forget_plan()
+    sandbox.write_plan(
+        {"forget:dry-run": plan | {"stderr": ["previewing"]}, "forget": plan | {"stderr": ["gone"]}}
+    )
+    result = await run(
+        await sandbox.engine(sandbox.config({"docs": full_job()})), operation=Operation.FORGET
+    )
+    assert result.outcome == Outcome.SUCCEEDED
+    text = Path(result.log_file).read_text()
+    order = [
+        "[rustic-scheduler] preview: what forget would remove",
+        "--dry-run",
+        "previewing",
+        "[rustic-scheduler] the preview passed the checks; removing 1 snapshots, keeping 1",
+        "gone",
+        "[rustic-scheduler] result: succeeded",
+    ]
+    positions = [text.index(part) for part in order]
+    assert positions == sorted(positions), text
 
 
 async def test_prune_flag_appears_only_when_enabled(sandbox):

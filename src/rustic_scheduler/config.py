@@ -354,6 +354,12 @@ class WebBrowseConfig(_Model):
         return self
 
 
+class WebRunLogsConfig(_Model):
+    """Showing each run's output (its run log) in the web interface. On by default."""
+
+    enabled: bool = True
+
+
 class WebAuthConfig(_Model):
     """HTTP Basic authentication for the web interface."""
 
@@ -390,6 +396,8 @@ class WebConfig(_Model):
     history_size: int = Field(default=50, ge=1, le=1000)
     #: Read-only snapshot and file browser. It shows file names to whoever can open the page.
     browse: WebBrowseConfig = WebBrowseConfig()
+    #: Rustic's output for each run, from the run logs in `scheduler.state_dir`. Read-only.
+    run_logs: WebRunLogsConfig = WebRunLogsConfig()
 
     @model_validator(mode="before")
     @classmethod

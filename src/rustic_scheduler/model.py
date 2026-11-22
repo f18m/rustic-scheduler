@@ -65,6 +65,10 @@ class Reason(StrEnum):
     SCHEDULER_RESTART = "scheduler_restart"
 
 
+#: Format of a run's identifier and of the stamp in its run log's file name.
+RUN_ID_FORMAT = "%Y%m%dT%H%M%S.%fZ"
+
+
 def utcnow() -> datetime:
     return datetime.now(UTC)
 
@@ -88,6 +92,22 @@ class OperationResult:
     data: dict[str, Any] = field(default_factory=dict)
 
     @property
+    def run_id(self) -> str | None:
+        """Identifies a run that started; also the stamp in its run log's file name."""
+        if self.started_at is None:
+            return None
+        return self.started_at.strftime(RUN_ID_FORMAT)
+
+    def summary(self) -> str:
+        """The outcome in one line, as written at the end of the run log."""
+        text = str(self.outcome)
+        if self.reason != Reason.NONE:
+            text += f" ({self.reason})"
+        if self.dry_run:
+            text += ", dry run"
+        return f"{text}: {self.detail}" if self.detail else text
+
+    @property
     def duration_seconds(self) -> float | None:
         if self.started_at is None or self.finished_at is None:
             return None
@@ -100,6 +120,7 @@ class OperationResult:
         for key in ("started_at", "finished_at"):
             raw[key] = raw[key].isoformat() if raw[key] else None
         raw["duration_seconds"] = self.duration_seconds
+        raw["run_id"] = self.run_id
         return raw
 
     @classmethod

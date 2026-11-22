@@ -3,6 +3,8 @@
 import asyncio
 import base64
 import socket
+from pathlib import Path
+from urllib.parse import urlencode
 
 import aiohttp
 import pytest
@@ -11,6 +13,7 @@ from aiohttp import web
 from helpers import STATUS, SUMMARY, forget_json, metric, snapshot, snapshots_json
 from rustic_scheduler.config import ConfigError
 from rustic_scheduler.model import Operation, Outcome
+from rustic_scheduler.runlogs import MAX_CHUNK, clean, read_chunk
 from rustic_scheduler.web import CSRF_HEADER, CSRF_VALUE, WebServer, create_app
 
 SENT = {CSRF_HEADER: CSRF_VALUE}
@@ -26,11 +29,13 @@ async def site(sandbox):
     """Returns a function that serves the interface for a configuration."""
     cleanup = []
 
-    async def start(job=None, plan=None, **settings):
+    async def start(job=None, plan=None, scheduler=None, **settings):
         sandbox.write_plan(plan or {"backup": {"stdout": [STATUS, SUMMARY]}})
         config = sandbox.config(
             {"docs": JOB | (job or {})},
             web={"enabled": True} | settings,
+            scheduler={"timezone": "UTC", "state_dir": str(sandbox.state_dir), "stop_grace": 2}
+            | (scheduler or {}),
         )
         engine = await sandbox.engine(config)
         runner = web.AppRunner(create_app(engine, config.web, "0.11.4"))
@@ -629,6 +634,8 @@ def test_web_configuration(sandbox):
     assert config.web.port == 9301 and config.web.operations == ["backup", "check"]
     assert config.web.auth.password_file is None and config.web.history_size == 50
     assert config.web.browse.enabled is False and config.web.browse.max_entries == 5000
+    assert config.web.run_logs.enabled is True
+    assert sandbox.config(web={"run_logs": {"enabled": False}}).web.run_logs.enabled is False
     browse = sandbox.config(web={"enabled": True, "browse": {"enabled": True, "timeout": "5m"}})
     assert browse.web.browse.enabled and browse.web.browse.timeout.total_seconds() == 300
     assert config.web.public_url is None
@@ -668,6 +675,8 @@ def test_web_configuration(sandbox):
         ({"enabled": True, "browse": {"timeout": "0s"}}, "web.browse"),
         ({"enabled": True, "browse": {"paths": ["/"]}}, "web.browse.paths: unknown setting"),
         ({"enabled": True, "browse": True}, "web.browse"),
+        ({"enabled": True, "run_logs": True}, "web.run_logs"),
+        ({"enabled": True, "run_logs": {"lines": 10}}, "web.run_logs.lines: unknown setting"),
         ({"public_url": "not-a-url"}, "web.public_url"),
         ({"public_url": "ftp://example.com/"}, "web.public_url"),
         ({"public_url": "https://user:password@example.com/"}, "web.public_url"),
@@ -748,3 +757,201 @@ async def test_page_script_shows_description_and_snapshot_totals_as_text(site):
         script = await response.text()
     assert "job.description" in script and "latest_files" in script and "latest_bytes" in script
     assert "innerHTML" not in script
+
+
+# ---------------------------------------------------------------- run output
+
+
+async def output(session, job="docs", operation="backup", status=200, **query) -> dict:
+    return await fetch(session, f"/api/v1/jobs/{job}/{operation}/output?{urlencode(query)}", status)
+
+
+async def until(predicate, timeout=10.0):
+    for _ in range(int(timeout / 0.05)):
+        result = await predicate()
+        if result:
+            return result
+        await asyncio.sleep(0.05)
+    raise AssertionError("condition not reached")
+
+
+async def test_the_output_of_a_run_is_followed_while_it_runs(site):
+    plan = {
+        "backup": {
+            "stderr": ["[INFO] using repository /repo"],
+            "stdout": [STATUS, "a plain line", SUMMARY],
+            "line_delay": 0.4,
+        }
+    }
+    engine, session = await site(plan=plan)
+    assert (await overview(session))["run_logs"] == {"available": True, "message": None}
+    nothing = await output(session)
+    assert nothing["state"] == "none" and nothing["run"] is None
+
+    async with session.post("/api/v1/jobs/docs/backup/run", headers=SENT) as response:
+        started = await response.json()
+    assert started["previous_run_id"] is None and started["requested_at"]
+
+    async def running():
+        data = await output(session)
+        return data if data["state"] == "running" else None
+
+    data = await until(running)
+    run_id = data["run"]["run_id"]
+    assert row(await overview(session), "backup")["run_id"] == run_id
+    text, offset, offsets = data["log"]["text"], data["log"]["next_offset"], []
+    seen_while_running = False
+    while True:
+        data = await output(session, run=run_id, offset=offset)
+        assert data["run"]["run_id"] == run_id and data["log"]["offset"] == offset
+        text += data["log"]["text"]
+        offset = data["log"]["next_offset"]
+        offsets.append(offset)
+        if data["state"] == "running" and "[INFO] using repository" in text:
+            seen_while_running = True
+        if data["state"] == "finished" and not data["log"]["more"]:
+            break
+        await asyncio.sleep(0.1)
+    assert seen_while_running, "the output only appeared at the end"
+    assert offsets == sorted(offsets)
+    assert data["run"]["outcome"] == "succeeded"
+    lines = text.splitlines()
+    assert lines[0].startswith("$ ") and "backup" in lines[0]
+    assert "a plain line" in lines and "bytes_done" not in text
+    assert lines[-1] == "[rustic-scheduler] result: succeeded"
+    # Asking again from the end returns nothing new.
+    again = await output(session, run=run_id, offset=offset)
+    assert again["log"]["text"] == "" and again["log"]["next_offset"] == offset
+
+    # The finished run is in the history with its id, and a new request names it as previous.
+    history = (await overview(session))["history"]
+    assert history[0]["run_id"] == run_id
+    async with session.post("/api/v1/jobs/docs/backup/run", headers=SENT) as response:
+        assert (await response.json())["previous_run_id"] == run_id
+    await engine.wait_idle()
+    latest = await output(session)
+    assert latest["state"] == "finished" and latest["run"]["run_id"] != run_id
+    old = await output(session, run=run_id)
+    assert old["run"]["run_id"] == run_id and "a plain line" in old["log"]["text"]
+
+
+async def test_output_is_redacted_and_terminal_codes_are_removed(site):
+    plan = {"backup": {"stderr": ["\x1b[31merror:\x1b[0m backend refused password=hunter2-xyz\a"]}}
+    engine, session = await site(plan=plan)
+    engine.trigger("docs", Operation.BACKUP)
+    await engine.wait_idle()
+    text = (await output(session))["log"]["text"]
+    assert "error: backend refused" in text
+    assert "hunter2-xyz" not in text and "\x1b" not in text and "\a" not in text
+
+
+async def test_a_queued_run_shows_as_queued(site):
+    engine, session = await site(
+        job={"check": {"enabled": True}},
+        plan={"backup": {"stdout": [STATUS, SUMMARY], "line_delay": 0.5}},
+    )
+    engine.trigger("docs", Operation.BACKUP)
+    engine.trigger("docs", Operation.CHECK)
+
+    async def queued():
+        data = await output(session, operation="check")
+        return data if data["state"] == "queued" else None
+
+    data = await until(queued)
+    assert data["run"] is None and data["log"] == {"available": False, "message": None}
+    await engine.wait_idle()
+    assert (await output(session, operation="check"))["state"] == "finished"
+
+
+async def test_a_skipped_request_is_reported_to_the_waiting_page(site, sandbox):
+    engine, session = await site(plan={"backup": {"stdout": [STATUS, SUMMARY], "line_delay": 0.3}})
+    engine.trigger("docs", Operation.BACKUP)
+    engine.trigger("docs", Operation.BACKUP)  # refused while the first one is active
+    data = await output(session)
+    assert data["last_skip"]["outcome"] == "skipped" and data["last_skip"]["run_id"] is None
+    await engine.wait_idle()
+
+
+async def test_output_requests_are_checked(site, sandbox):
+    engine, session = await site()
+    engine.trigger("docs", Operation.BACKUP)
+    await engine.wait_idle()
+    url = "/api/v1/jobs/docs/backup/output"
+    assert "own page" in (await fetch(session, url, 403, headers={}))["message"]
+    assert (
+        "own page"
+        in (await fetch(session, url, 403, headers=SENT | {"Origin": "http://evil.example"}))[
+            "message"
+        ]
+    )
+    assert (await output(session, job="nope", status=404))["message"] == "unknown job"
+    assert (await output(session, operation="restore", status=404))["message"] == (
+        "unknown operation"
+    )
+    for bad in ("-1", "x", "1.5"):
+        assert "offset" in (await output(session, status=400, offset=bad))["message"]
+    for run_id in ("20200101T000000.000000Z", "../../etc/passwd"):
+        message = (await output(session, status=404, run=run_id))["message"]
+        assert "no longer in the scheduler's memory" in message
+    # An offset past the end is the end.
+    assert (await output(session, offset=10**9))["log"]["text"] == ""
+
+
+async def test_output_can_be_switched_off(site, sandbox):
+    engine, session = await site(run_logs={"enabled": False})
+    assert (await overview(session))["run_logs"]["message"] == (
+        "showing run output is off (web.run_logs.enabled)"
+    )
+    engine.trigger("docs", Operation.BACKUP)
+    await engine.wait_idle()
+    data = await output(session)
+    # The state is still shown; the output is not.
+    assert data["state"] == "finished" and data["run"]["outcome"] == "succeeded"
+    assert data["log"] == {
+        "available": False,
+        "message": "showing run output is off (web.run_logs.enabled)",
+    }
+
+
+async def test_output_without_run_logs(site, sandbox):
+    engine, session = await site(scheduler={"run_logs_per_operation": 0})
+    engine.trigger("docs", Operation.BACKUP)
+    await engine.wait_idle()
+    assert "run_logs_per_operation is 0" in (await output(session))["log"]["message"]
+    assert (await overview(session))["run_logs"]["available"] is False
+
+
+async def test_the_output_of_a_pruned_log_is_no_longer_kept(site, sandbox):
+    engine, session = await site()
+    engine.trigger("docs", Operation.BACKUP)
+    await engine.wait_idle()
+    Path(engine.last_results[("docs", Operation.BACKUP)].log_file).unlink()
+    data = await output(session)
+    assert data["log"]["available"] is False and "no longer kept" in data["log"]["message"]
+
+
+def test_long_logs_are_read_in_whole_lines(tmp_path):
+    log_file = tmp_path / "run.log"
+    line = "x" * 99 + "\n"
+    log_file.write_text(line * 5000 + "partial")  # 500000 bytes and a line being written
+    first = read_chunk(log_file, 0, complete=False)
+    # A long log opens at its end, at a line boundary, without the unfinished line.
+    assert first.skipped > 0 and first.offset == first.skipped and first.offset % 100 == 0
+    assert first.text.endswith(line) and "partial" not in first.text
+    assert first.next_offset == 500000 and not first.more
+    assert len(first.text) <= MAX_CHUNK
+    # The unfinished line comes once the run is complete.
+    assert read_chunk(log_file, first.next_offset, complete=True).text == "partial"
+    # Reading from the start in chunks reaches the end.
+    offset, chunks = 1, 0
+    while True:
+        chunk = read_chunk(log_file, offset, complete=True)
+        offset, chunks = chunk.next_offset, chunks + 1
+        if not chunk.more:
+            break
+    assert offset == log_file.stat().st_size and chunks == 2
+    # One enormous line is still handed out, in pieces.
+    log_file.write_text("y" * (MAX_CHUNK + 10))
+    piece = read_chunk(log_file, 1, complete=False)
+    assert len(piece.text) == MAX_CHUNK and piece.more
+    assert clean("a\x1b[1;32mb\x1b[0m\x1b]0;title\x07c\td\r") == "abc\td"

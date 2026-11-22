@@ -11,6 +11,8 @@ web:
   password_file: /run/secrets/web_password
   browse:
     enabled: true                      # list snapshots and their files; off by default
+  run_logs:
+    enabled: true                      # show Rustic's output of each run; on by default
 ```
 
 Open `http://<host>:9301/`. With the example Compose file, publish the port first (it is
@@ -61,6 +63,8 @@ Then one row per operation that is enabled for it:
 - **Last result**: outcome, time and duration; the reason when it did not succeed; and the
   last skipped run, if any.
 - **Run now**, for the operations listed in `web.operations`.
+- **Output** while the operation runs, **Last output** otherwise: opens its run's output
+  (see [Run output](#run-output)).
 
 The page refreshes itself every three seconds (jobs, recent and next runs; not the snapshots).
 
@@ -83,6 +87,36 @@ for the repository, and a backup is followed by its after-backup sequence. The r
   accepted when it is listed in `web.operations`: it then runs on request only.
 
 There is no button to stop a run.
+
+## Run output
+
+After "Run now", a window opens with Rustic's output for that run, like a terminal. It
+waits while the run is queued, then follows the output as Rustic writes it, about once a
+second, and stops when the run has finished. The header shows the state (running, then the
+outcome) and, at the end, the duration, the number of attempts and the reason when the run
+did not succeed. The same window opens from **Output** / **Last output** on the Jobs tab and
+from **Output** in Recent runs, for any run whose log is still kept.
+
+The window shows the run log the scheduler already writes
+(`<state_dir>/logs/<job>/<time>-<operation>.log`), so it needs `scheduler.state_dir` and
+`scheduler.run_logs_per_operation` above 0, and it shows the same text:
+
+- Rustic's log lines (stderr) and its plain stdout lines, **with secrets masked**. Backup
+  progress messages are left out; the Jobs tab shows progress. The JSON output of `forget`
+  and `snapshots`, which the scheduler reads itself, is not shown either.
+- Lines the scheduler adds, highlighted: `$ rustic ...` before each Rustic process (the
+  command line, masked), how that process ended, forget's preview and removal steps, retry
+  attempts, and the run's result at the end.
+- Terminal colour codes and other control characters are removed.
+
+Closing the window does not stop the run, and following it does not delay or change the run.
+The page keeps up to about 2 million characters; for a longer log it shows the end. A log
+opened after it has grown beyond 256 KiB starts near its end, with a note. "Follow the
+output" scrolls along with the output, and scrolling up turns it off. **Copy** copies what
+the window shows.
+
+`web.run_logs.enabled: false` hides the buttons and the output (the API answers with the
+run's state and no output).
 
 ## Snapshots
 
@@ -122,7 +156,9 @@ leads back up.
 ## Recent runs
 
 The most recent finished and skipped runs, newest first: time, job, operation, outcome,
-trigger, duration and detail. `web.history_size` (default 50) bounds the list.
+trigger, duration and detail, with an **Output** button for runs whose run log is still kept
+(the newest `scheduler.run_logs_per_operation` of each operation). `web.history_size`
+(default 50) bounds the list.
 
 This is **not a stored history**. The list lives in memory. After a restart it starts with
 the last known result of each operation, which is all the state file holds, and grows from
@@ -170,7 +206,8 @@ metrics port (9300 stays read-only) and off by default.
 | `web.auth.enabled` | Enable HTTP Basic authentication on every route, the page included. When enabled, `web.auth.password_file` must be set. When disabled, no authentication is required. |
 | `web.auth.password_file` | The file holds the password for HTTP Basic authentication (with `web.auth.username`, default `admin`). It is read at each request, so replacing the file rotates it. If the file cannot be read, or holds no password (empty or only whitespace), every request fails with 503: an unreadable or empty password never means "no password". Only used when `web.auth.enabled` is true. |
 | `web.browse.enabled` | Off by default. When on, everyone who can open the page can read the names, sizes, times and owners of the files in every job's snapshots; not their contents. |
-| Same-site check | A request to start an operation, or to list snapshots or files, must carry a header that only the scheduler's own page sends, and a matching `Origin`. Another web site open in your browser cannot start a run or make the scheduler run Rustic. |
+| `web.run_logs.enabled` | **On by default.** Everyone who can open the page can read Rustic's output of each run: the command lines, file paths that Rustic names in warnings and errors, and repository locations, with secrets masked. Turn it off if that is more than the page's users should see. |
+| Same-site check | A request to start an operation, to list snapshots or files, or to read a run's output, must carry a header that only the scheduler's own page sends, and a matching `Origin`. Another web site open in your browser cannot start a run or make the scheduler run Rustic. |
 | Content policy | The page loads nothing from other sites and has no inline script; job names and error text are inserted as text. |
 
 What it does **not** do:
@@ -178,8 +215,9 @@ What it does **not** do:
 - **No TLS.** The password travels in clear text. On anything but a trusted network, publish
   the port on loopback and put a reverse proxy with HTTPS in front of it.
 - **No password by default.** Without `password_file`, anyone who can reach the port can
-  start the listed operations and read job names, paths in error messages and the commands
-  of the manual panel, and with `web.browse.enabled` the file names in every snapshot. The
+  start the listed operations and read job names, paths in error messages, the commands
+  of the manual panel and Rustic's output of each run (unless `web.run_logs.enabled` is
+  false), and with `web.browse.enabled` the file names in every snapshot. The
   scheduler logs a warning at start-up in that case.
 - No user accounts, no roles, no rate limiting, no audit trail beyond the scheduler's log
   (each accepted and refused request is logged) and
@@ -198,6 +236,7 @@ GET  /api/v1/overview                                 jobs, operations, progress
 POST /api/v1/jobs/{job}/{operation}/run               header: X-Requested-With: rustic-scheduler
 GET  /api/v1/jobs/{job}/snapshots[?refresh=1]         same header; needs web.browse.enabled
 GET  /api/v1/jobs/{job}/snapshots/{id}/files?path=/a  same header; needs web.browse.enabled
+GET  /api/v1/jobs/{job}/{operation}/output[?run=ID&offset=N]  same header
 ```
 
 `POST` answers 202 when queued, 409 with a `message` when refused, 403 without the header,
@@ -208,6 +247,19 @@ a snapshot that is not the job's (the full 64-character id is required) or a pat
 not a directory of it; 400 for a path containing `.` or `..`; 403 without the header; 409
 when the repository is in use; 502 with Rustic's message when Rustic failed; 503 during
 shutdown. Sizes and times that Rustic did not report are `null`.
+
+`POST .../run` also returns `previous_run_id`, the id of the operation's latest run before
+the request, and `requested_at`; the page waits for a run with another id.
+
+The output route answers with the run's `state` (`running`, `finished`, `queued` or `none`),
+the `run` (as in the history, with its `run_id`), the operation's `last_skip`, and `log`:
+`{available, message, offset, next_offset, text, more, skipped}`. Without `run` it describes
+the running run, else the latest finished one. `text` holds whole lines from byte `offset`,
+at most 256 KiB; ask again from `next_offset`, at once when `more` is true. When the log
+cannot be shown, `available` is false and `message` says why. It answers 404 for an unknown
+job or operation and for a run no longer in the scheduler's memory, 400 for a bad offset,
+403 without the header. The file is found from the scheduler's own record of the run, never
+from a name in the request.
 
 ```sh
 curl -u admin:"$(cat web_password)" -X POST -H 'X-Requested-With: rustic-scheduler' \

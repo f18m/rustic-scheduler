@@ -41,6 +41,7 @@ with `uv`; do not add dependencies without a reason and update `uv.lock` when yo
 | `homeassistant.py` | Home Assistant MQTT discovery payloads |
 | `web.py`, `webui/` | Optional web interface on its own port: overview JSON, run requests, static tabbed page and favicon |
 | `browse.py` | Read-only snapshot and file listings for the web interface (`web.browse`), via `Engine.query` |
+| `runlogs.py` | A run's output for the web interface (`web.run_logs`): reads the existing run log by offset, found from the engine's record of the run |
 | `notify.py`, `pushgateway.py` | Apprise notifications; Pushgateway delivery verification |
 | `app.py`, `cli.py` | Start-up wiring; the `rustic-scheduler` command |
 | `tests/unit/` | Uses `tests/fake_rustic.py`, a scripted stand-in driven by a JSON plan |
@@ -84,7 +85,9 @@ with `uv`; do not add dependencies without a reason and update `uv.lock` when yo
     that fails closed). Both default to `backup`, `check` and still apply rule 3. The web
     interface's snapshot browser (`web.browse`, off by default) is read-only: it runs only
     `snapshots` and `cat tree` on the job's own snapshots, under the repository lock without
-    queueing, and must stay unable to read file contents or change anything. Do not
+    queueing, and must stay unable to read file contents or change anything. The run
+    output route (`web.run_logs`, on by default) is read-only too: it reads only run logs
+    the engine knows about (never a path from the request) and starts nothing. Do not
     widen either, and do not add mutating routes to the metrics port, without the user
     asking.
 13. **The web page never builds HTML from data** and loads nothing inline or from other

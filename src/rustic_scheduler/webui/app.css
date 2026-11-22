@@ -11,6 +11,9 @@
   --warn: #9a6700;
   --info: #0b6aa8;
   --code-bg: #eef1f5;
+  --term-bg: #0d1117;
+  --term-text: #d6dde6;
+  --term-note: #7ee787;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -169,6 +172,37 @@ pre {
 }
 .notes { padding-left: 20px; }
 .notes li { margin: 8px 0; }
+
+dialog#console {
+  width: min(1000px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+}
+dialog#console[open] { display: flex; flex-direction: column; gap: 8px; }
+dialog#console::backdrop { background: rgb(0 0 0 / 0.45); }
+.console-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.console-head h3 { overflow-wrap: anywhere; }
+.console-head button { margin-left: auto; }
+.console-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+pre.terminal {
+  margin: 0;
+  height: 60vh;
+  min-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--term-bg);
+  color: var(--term-text);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+pre.terminal .note { color: var(--term-note); }
+pre.terminal .gap { color: var(--muted); font-style: italic; }
+td.nowrap button + button { margin-left: 6px; }
 
 footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line); text-align: center; font-size: 13px; }
 footer a { color: var(--muted); }

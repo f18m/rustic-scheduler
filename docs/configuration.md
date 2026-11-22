@@ -19,7 +19,7 @@ Rustic's own options do not belong here. They stay in your Rustic TOML profiles;
 | `missed_run_policy` | `catch_up` | Default for jobs: `catch_up` or `skip`. See [behaviour.md](behaviour.md#missed-runs). |
 | `misfire_grace` | `24h` | How late a run may still start under `catch_up`. |
 | `stop_grace` | `30s` | Time Rustic gets between SIGTERM and SIGKILL. |
-| `run_logs_per_operation` | `20` | Run logs kept per job and operation. `0` disables run logs. |
+| `run_logs_per_operation` | `20` | Run logs kept per job and operation. `0` disables run logs (and the web interface's run output). |
 | `log_level` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
 | `log_format` | `text` | `text` or `json`. |
 
@@ -56,6 +56,7 @@ The optional browser interface. See [web.md](web.md).
 | `browse.enabled` | `false` | Show the Snapshots tab: each job's snapshots and the files in them (names, sizes, times, owners; read-only). Visible to everyone who can open the page. See [web.md](web.md#snapshots). |
 | `browse.timeout` | `60s` | Time limit for one listing (a Rustic process). A listing holds the repository lock, so a run that becomes due waits at most this long for it. |
 | `browse.max_entries` | `5000` | Entries shown for one directory (1 to 100000); a larger directory is shown truncated. |
+| `run_logs.enabled` | `true` | Show Rustic's output of each run (its run log, secrets masked) in a window after "Run now" and from the Jobs and Recent runs tabs. Needs `scheduler.state_dir` and `scheduler.run_logs_per_operation` above 0. Visible to everyone who can open the page. See [web.md](web.md#run-output). |
 
 ## `pushgateway`
 

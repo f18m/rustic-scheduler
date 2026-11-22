@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .model import Operation, OperationResult, Outcome, Reason, Trigger, utcnow
+from .model import RUN_ID_FORMAT, Operation, OperationResult, Outcome, Reason, Trigger, utcnow
 
 log = logging.getLogger(__name__)
 
@@ -127,7 +127,7 @@ class StateStore:
     def run_log_path(self, job: str, operation: Operation, started: datetime) -> Path | None:
         if not self.usable or self.state_dir is None or self.logs_to_keep == 0:
             return None
-        stamp = started.strftime("%Y%m%dT%H%M%S.%fZ")
+        stamp = started.strftime(RUN_ID_FORMAT)
         return self.state_dir / "logs" / job / f"{stamp}-{operation}.log"
 
     def prune_run_logs(self, job: str, operation: Operation) -> None:

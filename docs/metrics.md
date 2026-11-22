@@ -85,7 +85,10 @@ Metrics say what happened. For why:
 - `GET /api/v1/status` or `rustic-scheduler status`: last result of every operation with
   reason, exit status, detail text, snapshot ids and the path of the run log.
 - Run logs in `<state_dir>/logs/<job>/<time>-<operation>.log`: Rustic's full output for that
-  run, with secrets masked. The newest 20 per operation are kept.
+  run, with secrets masked, including every process of the run (forget's preview and removal,
+  retries). Lines the scheduler adds start with `$ ` (the command line) or
+  `[rustic-scheduler]` (how each process ended, retries, the result). The newest 20 per
+  operation are kept. The web interface shows them ([web.md](web.md#run-output)).
 - The container log.
 
 ## Rustic's own metrics and the Pushgateway

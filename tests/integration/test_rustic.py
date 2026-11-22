@@ -69,6 +69,52 @@ async def test_backup_with_live_json_progress_and_no_mqtt(real):
     assert "integration-test-password" not in log_text
 
 
+async def test_the_web_page_follows_rustics_output_while_it_runs(real):
+    """Rustic 0.11.4 writes its log lines as it goes, so the page can show them live."""
+    for index in range(4):
+        (real.source / f"random{index}.bin").write_bytes(os.urandom(48_000_000))
+    config = real.config(web={"enabled": True})
+    engine = await real.engine(config)
+    runner = web.AppRunner(create_app(engine, config.web, SUPPORTED_RUSTIC_VERSION))
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]
+    sent = {CSRF_HEADER: CSRF_VALUE}
+    url = "/api/v1/jobs/docs/backup/output"
+    try:
+        async with aiohttp.ClientSession(base_url=f"http://127.0.0.1:{port}") as session:
+            async with session.post("/api/v1/jobs/docs/backup/run", headers=sent) as response:
+                assert response.status == 202
+            text, offset, run_id, live = "", 0, None, False
+            for _ in range(3000):
+                query = {"offset": offset} | ({"run": run_id} if run_id else {})
+                async with session.get(url, params=query, headers=sent) as response:
+                    data = await response.json()
+                if data["state"] in ("running", "finished") and data["log"]["available"]:
+                    run_id = data["run"]["run_id"]
+                    text += data["log"]["text"]
+                    offset = data["log"]["next_offset"]
+                    if data["state"] == "running" and "password is correct" in text:
+                        live = True
+                    if data["state"] == "finished" and not data["log"]["more"]:
+                        break
+                await asyncio.sleep(0.02)
+        result = engine.last_results[("docs", Operation.BACKUP)]
+        assert result.outcome == Outcome.SUCCEEDED and result.run_id == run_id
+        assert live, "Rustic's log lines only appeared once the backup had finished"
+        # The page received the whole run log, redacted, with the scheduler's own lines.
+        assert text == Path(result.log_file).read_text()
+        lines = text.splitlines()
+        assert lines[0].startswith("$ ") and " backup " in lines[0]
+        assert "[rustic-scheduler] the process exited with status 0" in lines
+        assert lines[-1] == "[rustic-scheduler] result: succeeded"
+        assert "integration-test-password" not in text
+    finally:
+        await runner.cleanup()
+        await engine.shutdown()
+
+
 async def test_several_sources_make_one_snapshot(real):
     second = real.root / "second"
     second.mkdir()
