@@ -180,8 +180,9 @@ Ready-to-copy commands, per job, to look at the repository without the scheduler
 job's snapshots, list the files of a snapshot, check the repository, see what a restore would
 do, restore. Two variants are shown:
 
-- through the helper in the container (`rustic-scheduler rustic JOB -- ...`), which uses the
-  same profiles, environment and binary as the scheduler;
+- through `docker exec` with the scheduler's container, using all environment variables from
+  your `rustic.env` and `jobs.<name>.env` configuration, which ensures the same profiles,
+  environment and binary are available;
 - with plain `rustic -P <profile> ...`, for the container or any other machine that has the
   profile files and the secrets they point to.
 

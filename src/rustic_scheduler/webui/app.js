@@ -252,17 +252,14 @@ function renderManual(data) {
   manualKey = key;
   const sections = data.jobs.map((job, index) => {
     const m = job.manual;
-    const inside = `docker compose exec rustic-scheduler ${m.helper}`;
     const plain = `rustic ${m.profiles}`;
-    const container = [
-      "# this job's snapshots",
-      `${inside} snapshots ${m.scope}`,
-      "# files in a snapshot (use an id from the list above)",
-      `${inside} ls SNAPSHOT_ID`,
-      "# check the repository's metadata",
-      `${inside} check`,
-      "# what a restore would write; restores no file (Rustic may create the empty target directory)",
-      `${inside} restore --dry-run SNAPSHOT_ID /restore/target`,
+    const dockerExec = [
+      "docker exec -ti <rustic-scheduler-container> bash",
+      m.docker_exec + " snapshots " + m.scope,
+      "# or instead of 'snapshots' use: ls SNAPSHOT_ID",
+      "# or: check",
+      "# or: restore --dry-run SNAPSHOT_ID /restore/target",
+      "# or: restore SNAPSHOT_ID:/path/in/snapshot /restore/target",
     ].join("\n");
     const direct = [
       ...m.env.map((line) => `export ${line}`),
@@ -276,7 +273,7 @@ function renderManual(data) {
       el("summary", { text: job.name }),
       el("p", { class: "small", text:
         `Snapshots of this job carry the label "${m.label}"` + (m.host ? ` and the host "${m.host}".` : ".") }),
-      block("In the scheduler's container (same profiles, environment and Rustic binary as the scheduler; adjust the service name to your Compose file)", container),
+      block("In the scheduler's container (with environment variables from your config; replace <rustic-scheduler-container> with the container name or ID)", dockerExec),
       block(`With plain Rustic ${data.rustic_version}, in the container or on any machine that has these profile files and the secrets they refer to (adjust the paths)`, direct));
   });
   $("manual").replaceChildren(el("div", { class: "card" }, ...sections));

@@ -81,13 +81,24 @@ def manual_instructions(engine: Engine, job: str) -> dict[str, Any]:
         scope += ["--filter-host", runtime.job.host]
     # Only what the configuration sets; the inherited environment is not shown.
     env = {**engine.config.rustic.env, **runtime.job.env}
+    env_list = [REDACTOR(f"{name}={shlex.quote(value)}") for name, value in sorted(env.items())]
+
+    # Build docker exec command with environment variables
+    docker_exec_parts = []
+    for env_var in env_list:
+        docker_exec_parts.append(env_var + " \\")
+    docker_exec_parts.append(f"   {runtime.binary} \\")
+    docker_exec_parts.append(f"   {shlex.join(runtime.base_args)}")
+
     return {
         "label": runtime.label,
         "host": runtime.job.host,
         "scope": shlex.join(scope),
         "profiles": shlex.join(runtime.base_args),
         "helper": f"rustic-scheduler rustic {shlex.quote(job)} --",
-        "env": [REDACTOR(f"{name}={shlex.quote(value)}") for name, value in sorted(env.items())],
+        "env": env_list,
+        "binary": runtime.binary,
+        "docker_exec": "\n".join(docker_exec_parts),
     }
 
 
