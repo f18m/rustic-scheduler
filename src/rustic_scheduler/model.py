@@ -14,6 +14,8 @@ class Operation(StrEnum):
     PRUNE = "prune"
     CHECK = "check"
     SNAPSHOTS = "snapshots"
+    #: Creates the repository. Only on request, and only when the job sets ``allow_init``.
+    INIT = "init"
 
 
 class Outcome(StrEnum):

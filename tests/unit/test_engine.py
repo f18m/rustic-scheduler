@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from helpers import STATUS, SUMMARY, forget_json, metric, snapshot, snapshots_json
+from helpers import INIT_CREATED, STATUS, SUMMARY, forget_json, metric, snapshot, snapshots_json
 from rustic_scheduler.model import Operation, Outcome, Reason, Trigger
 
 OK_BACKUP = {"stdout": [STATUS, SUMMARY]}
@@ -969,3 +969,47 @@ async def test_snapshot_totals_are_dropped_when_the_newest_snapshot_has_none(san
     await run(engine, operation=Operation.SNAPSHOTS)
     assert metric(engine.metrics, "rustic_scheduler_snapshot_latest_files", {"job": "docs"}) is None
     assert metric(engine.metrics, "rustic_scheduler_snapshot_latest_bytes", {"job": "docs"}) is None
+
+
+# ------------------------------------------------------------------- init
+
+
+def allow_init(sandbox, **job):
+    return sandbox.config(
+        {"docs": {"profiles": ["repo"], "sources": ["/data"], "allow_init": True} | job}
+    )
+
+
+async def test_init_is_refused_unless_the_job_allows_it(sandbox):
+    sandbox.write_plan({"init": {"stderr": [INIT_CREATED]}})
+    engine = await sandbox.engine()
+    accepted, message = engine.trigger("docs", Operation.INIT)
+    assert not accepted and "allow_init" in message
+    await engine.wait_idle()
+    assert sandbox.commands() == []
+
+
+async def test_init_creates_the_repository_when_the_job_allows_it(sandbox):
+    sandbox.write_plan({"init": {"stderr": [INIT_CREATED]}})
+    engine = await sandbox.engine(allow_init(sandbox))
+    result = await run(engine, operation=Operation.INIT)
+    assert result.outcome == Outcome.SUCCEEDED and result.detail == "repository created"
+    assert sandbox.commands() == ["init"]
+
+
+async def test_init_without_rustics_confirmation_is_unknown_not_succeeded(sandbox):
+    sandbox.write_plan({"init": {"stderr": ["[INFO] using cache"]}})
+    engine = await sandbox.engine(allow_init(sandbox))
+    result = await run(engine, operation=Operation.INIT)
+    assert result.outcome == Outcome.UNKNOWN and result.reason == Reason.NO_SUMMARY
+
+
+async def test_init_on_an_existing_repository_fails_with_rustics_message(sandbox):
+    sandbox.write_plan(
+        {"init": {"exit": 1, "stderr": ["error: Config file already exists. Aborting."]}}
+    )
+    engine = await sandbox.engine(allow_init(sandbox))
+    result = await run(engine, operation=Operation.INIT)
+    assert result.outcome == Outcome.FAILED and result.reason == Reason.EXIT_CODE
+    assert "already exists" in result.detail
+    assert sandbox.commands() == ["init"]  # never retried

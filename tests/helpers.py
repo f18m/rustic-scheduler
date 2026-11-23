@@ -43,6 +43,8 @@ STATUS = {
     "total_bytes": 5000,
     "bytes_done": 1000,
 }
+#: What Rustic 0.11.4 writes to stderr after a successful `init` (it prints no summary).
+INIT_CREATED = "[INFO] repository 158f497f successfully created."
 
 
 def snapshot(label: str, when: str, ident: str = "b", host: str = "h") -> dict[str, Any]:

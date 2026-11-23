@@ -751,3 +751,23 @@ async def test_web_interface_lists_real_snapshots_and_their_files(real, short_tm
     # Looking is not an operation, and nothing was changed in the repository.
     assert [r.operation for r in engine.history] == [Operation.BACKUP] * 3
     assert len(real.snapshots()) == 3 and real.rustic("check").returncode == 0
+
+
+# ------------------------------------------------------------------- init
+
+
+async def test_init_creates_the_repository_and_a_second_init_is_refused(real):
+    fresh = real.root / "fresh-repo"
+    real.profile(
+        "fresh",
+        f'[repository]\nrepository = "{fresh}"\npassword-file = "{real.password_file}"\n'
+        "no-cache = true\n",
+    )
+    engine = await real.engine(real.config({"docs": real.job(profiles=["fresh"], allow_init=True)}))
+    result = await run(engine, operation=Operation.INIT)
+    # Rustic's exit status is 0 when interrupted too: success needs its "created" line.
+    assert result.outcome == Outcome.SUCCEEDED, result.detail
+    assert "successfully created" in Path(result.log_file).read_text()
+    assert (fresh / "config").exists()
+    again = await run(engine, operation=Operation.INIT)
+    assert again.outcome == Outcome.FAILED and "already exists" in again.detail

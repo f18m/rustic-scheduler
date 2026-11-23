@@ -88,6 +88,11 @@ profile's `tags` or `label` instead of adding to it, which is why the scheduler 
 tags. And `[backup] init = true` or `[global] dry-run = true` in a profile is refused at
 start-up unless allowed (`allow_init`), because either would change what a backup means.
 
+An `init` run is `rustic -P <profiles> init`, with nothing added. Rustic 0.11.4 prints no
+summary for it and exits 0 when it is interrupted, so the run succeeds only when Rustic
+also prints `repository <id> successfully created`. Without that line the result is
+`unknown`; a repository that already exists makes Rustic exit 1 and the result `failed`.
+
 Profile values the scheduler does not pass are left entirely to Rustic.
 
 ## Snapshot scope

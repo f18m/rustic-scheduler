@@ -38,7 +38,7 @@ Rustic runs as an external process: the pinned release is **Rustic 0.11.4**, unm
 | `forget` | **off** | **Deletes snapshots** of this job. Needs explicit `keep` rules. |
 | `forget.prune` | **off** | **Deletes repository data** no snapshot uses any more (`forget --prune`). |
 | `prune` | **off** | **Deletes repository data**; acts on the whole repository, not one job. |
-| Repository creation (`init`) | **never** unless `allow_init: true` | Creates a repository. |
+| Repository creation (`init`) | **never** unless `allow_init: true` | Creates a repository. Only on request, and only with `allow_init`: from the web interface (when `web.operations` lists `init`) or `rustic-scheduler trigger JOB init`. |
 | Pushgateway group cleanup | **off** | Deletes stale metric groups in the Pushgateway only. |
 | MQTT, notifications | **off** | None. |
 | MQTT commands | **off** | Lets MQTT messages start `backup` and `check`; `forget` and `prune` only if listed, and only if enabled on the job. |
@@ -77,7 +77,7 @@ docker compose up -d
 docker compose exec rustic-scheduler rustic-scheduler status
 ```
 
-The scheduler never creates a repository on its own. Create it once, by hand:
+The scheduler never creates a repository on its own. Create it once, by hand (or, with `allow_init: true` on the job, with `rustic-scheduler trigger JOB init` or from the web page):
 
 ```sh
 docker compose run --rm --entrypoint rustic rustic-scheduler \

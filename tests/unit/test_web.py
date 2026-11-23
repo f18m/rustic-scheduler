@@ -10,7 +10,7 @@ import aiohttp
 import pytest
 from aiohttp import web
 
-from helpers import STATUS, SUMMARY, forget_json, metric, snapshot, snapshots_json
+from helpers import INIT_CREATED, STATUS, SUMMARY, forget_json, metric, snapshot, snapshots_json
 from rustic_scheduler.config import ConfigError
 from rustic_scheduler.model import Operation, Outcome
 from rustic_scheduler.runlogs import MAX_CHUNK, clean, read_chunk
@@ -955,3 +955,40 @@ def test_long_logs_are_read_in_whole_lines(tmp_path):
     piece = read_chunk(log_file, 1, complete=False)
     assert len(piece.text) == MAX_CHUNK and piece.more
     assert clean("a\x1b[1;32mb\x1b[0m\x1b]0;title\x07c\td\r") == "abc\td"
+
+
+# ---------------------------------------------------------------------- init
+
+
+async def test_init_runs_from_the_page_when_the_job_allows_it_and_web_lists_it(site):
+    engine, session = await site(
+        job={"allow_init": True},
+        plan={"init": {"stderr": [INIT_CREATED]}},
+        operations=["backup", "check", "init"],
+    )
+    init = row(await overview(session), "init")
+    assert init["can_run"] is True and init["destructive"] is False
+    async with session.post("/api/v1/jobs/docs/init/run", headers=SENT) as response:
+        assert response.status == 202
+    await engine.wait_idle()
+    result = engine.last_results[("docs", Operation.INIT)]
+    assert result.outcome == Outcome.SUCCEEDED and result.trigger == "web"
+
+
+async def test_init_is_not_offered_when_web_operations_do_not_list_it(site):
+    _, session = await site(job={"allow_init": True})
+    init = row(await overview(session), "init")
+    assert init["can_run"] is False
+    async with session.post("/api/v1/jobs/docs/init/run", headers=SENT) as response:
+        assert response.status == 409
+        assert "web.operations" in (await response.json())["message"]
+
+
+async def test_init_is_refused_on_the_page_when_the_job_does_not_allow_it(site, sandbox):
+    engine, session = await site(operations=["backup", "init"])
+    assert all(o["operation"] != "init" for o in (await overview(session))["jobs"][0]["operations"])
+    async with session.post("/api/v1/jobs/docs/init/run", headers=SENT) as response:
+        assert response.status == 409
+        assert "allow_init" in (await response.json())["message"]
+    await engine.wait_idle()
+    assert sandbox.commands() == []

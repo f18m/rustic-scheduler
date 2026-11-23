@@ -38,6 +38,9 @@ skipped.
 - `--json-progress` writes `status` and `summary` objects, one per line, to stdout; logs go
   to stderr. The exact field sets are asserted.
 - `percent_done` is a fraction; `seconds_remaining` is omitted when unknown.
+- `rustic init` writes `repository <id> successfully created` to stderr and exits 0; running it
+  on an existing repository exits 1 with `Config file already exists`. A run started by the
+  scheduler succeeds only on the first line (`test_init_creates_the_repository_and_a_second_init_is_refused`).
 - The summary is printed for every successful backup, without `snapshot_id` when no snapshot
   was saved (`--skip-if-unchanged`).
 - Rustic exits with status **0** when stopped by SIGTERM mid-backup, and writes no snapshot.
@@ -244,6 +247,15 @@ command validation and refusals; the content of the Home Assistant discovery mes
 
 The stand-in's canned `summary` is checked against the real binary's field set by an
 integration test, so the two cannot drift apart unnoticed.
+
+Repository creation (`init`): refused without `allow_init`, from the scheduler's trigger, the
+web page and the control socket alike; success only with Rustic's confirmation line; a missing
+confirmation is `unknown`; a refusal by Rustic is `failed` and never retried; the page offers
+`init` only when the job allows it and `web.operations` lists it, and it asks before sending.
+
+The web page's jobs table (the Description column, its links and the confirmation text) is
+checked in a simulated DOM, not in a browser. The links were fetched once to confirm that they
+exist; they point at Rustic's online book, which may describe a newer Rustic than 0.11.4.
 
 ## Verified on the built image
 
