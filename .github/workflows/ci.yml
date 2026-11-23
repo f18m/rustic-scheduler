@@ -77,6 +77,12 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
+      - name: Decide whether to publish the image
+        id: publish
+        # Pull requests from forks get a read-only token and no secrets, so they only build.
+        # Dependabot pull requests are not given a write token either.
+        run: |
+          echo "publish=${{ github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') }}" >> "$GITHUB_OUTPUT"
       - name: Extract image metadata
         id: meta
         uses: docker/metadata-action@v6
@@ -84,11 +90,12 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=ref,event=branch
+            type=ref,event=pr
             type=raw,value=${{ github.event.release.tag_name || 'release' }},enable=${{ github.event_name == 'release' }}
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=sha-
       - name: Log in to GHCR
-        if: github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        if: steps.publish.outputs.publish == 'true'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -102,6 +109,6 @@ jobs:
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+          push: ${{ steps.publish.outputs.publish == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

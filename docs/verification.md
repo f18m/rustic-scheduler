@@ -282,7 +282,8 @@ script was not run on amd64 hardware.
   host suspend and clock steps. These are covered by unit tests with a controllable clock.
 - Large repositories: memory and time for snapshot listings with thousands of snapshots.
 - The GitHub Actions workflow itself has not been run; its steps are the same commands that
-  were run locally.
+  were run locally. This includes publishing pull request images to GHCR (`pr-<number>`),
+  which has not been checked on a real pull request.
 - MQTT client certificates; MQTT brokers other than Mosquitto.
 - Apprise targets other than the JSON webhook; each service has its own failure modes.
 - Pushgateway behind basic authentication.
