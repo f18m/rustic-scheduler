@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.3
         with:
-          version: "0.13.8"
+          version: "0.13.10"
       - run: uv sync --frozen
       - run: uv run ruff format --check src tests
       - run: uv run ruff check src tests
@@ -37,7 +37,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.3
         with:
-          version: "0.13.8"
+          version: "0.13.10"
           python-version: ${{ matrix.python }}
       - run: uv sync --frozen
       - name: Install the pinned Rustic binary (checksum verified)
@@ -58,7 +58,7 @@ jobs:
           fetch-depth: 0 # the version is derived from the Git tags
       - uses: astral-sh/setup-uv@v10.3.3
         with:
-          version: "0.13.8"
+          version: "0.13.10"
       - name: Version from the Git tags
         id: version
         env:
