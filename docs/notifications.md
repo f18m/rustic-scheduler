@@ -41,21 +41,26 @@ target at it with Apprise's own `apprise://` or `apprises://` URL.
 ## Start-up
 
 When notifications are enabled, the scheduler also sends one notification once it is running:
-`rustic-scheduler <version> started`, with the scheduler version, the Rustic version and the
+`🚀 rustic-scheduler <version> started`, with the scheduler version, the Rustic version and the
 number of jobs. It is not selected by `events`; to stop it, disable notifications. Each start
 sends it again, so a crash loop repeats it. Its metric event label is `scheduler_started`.
 
 ## Content
 
-Title: `<operation> <outcome>: <job>`, for example `backup failed: documents`.
+Title: an icon, then `<operation> <outcome>: <job>`, for example `❌ backup failed: documents`.
+The icon shows the outcome at a glance: ✅ succeeded, ⚠️ skipped, ❌ failed, interrupted or
+unknown, 🚀 start-up.
 
 Body: job, operation, outcome, reason, trigger, duration; for failures Rustic's exit status
 and the last error lines; for a succeeded backup the file counts and bytes added; for forget
 the number of snapshots removed and kept. Apprise's notification type is `success`, `warning`
-(skipped) or `failure`; the start-up notification is `info`.
+(skipped), `failure`, or `info` for the start-up notification.
 
-The body never contains command lines, environment variables or notification URLs, and passes
-through the same secret masking as the logs.
+If the [web interface](web.md) is enabled and `web.public_url` is set, the last line of every
+notification, start-up included, is `Web UI: <public_url>`. Without either, there is no link.
+
+The body never contains command lines, environment variables or notification target URLs, and
+passes through the same secret masking as the logs. The only URL in it is the web link above.
 
 ## Delivery, retries, failures
 

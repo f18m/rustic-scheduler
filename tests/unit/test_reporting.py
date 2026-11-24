@@ -149,6 +149,9 @@ def test_events_and_rendering():
     assert title == "backup failed: docs"
     assert "Reason: exit_code" in body and "Duration: 1m 05s" in body and "exit status: 1" in body
     assert "abc123" not in body
+    assert "Web UI" not in body
+    _, body = render(result(), web_url="https://backup.example/")
+    assert body.endswith("\n\nWeb UI: https://backup.example/")
     _, body = render(
         result(
             data={
@@ -180,12 +183,12 @@ class StubTarget:
         return outcome
 
 
-def notifier(tmp_path, behaviour, **config):
+def notifier(tmp_path, behaviour, web_url=None, **config):
     path = tmp_path / "apprise.conf"
     path.write_text("")
     cfg = NotificationsConfig(enabled=True, config_files=[path], retry_delay=0, **config)
     metrics = Metrics()
-    instance = Notifier(cfg, metrics)
+    instance = Notifier(cfg, metrics, web_url)
     target = StubTarget(behaviour)
     instance._load = lambda: target
     return instance, target, metrics
@@ -202,7 +205,7 @@ async def test_only_selected_events_are_sent(tmp_path):
     instance.submit(result())
     instance.submit(result(outcome=Outcome.FAILED))
     await instance.drain()
-    assert len(target.calls) == 1 and target.calls[0]["title"] == "backup failed: docs"
+    assert len(target.calls) == 1 and target.calls[0]["title"] == "❌ backup failed: docs"
     assert sent(metrics, "backup_failure", "sent") == 1
     assert sent(metrics, "backup_success", "sent") is None
 
@@ -212,10 +215,63 @@ async def test_startup_is_announced_whatever_events_are_selected(tmp_path):
     instance.submit_startup("0.5.0", "0.11.4", 3)
     await instance.drain()
     [call] = target.calls
-    assert call["title"] == "rustic-scheduler 0.5.0 started"
+    assert call["title"] == "🚀 rustic-scheduler 0.5.0 started"
     assert call["body"] == "Version: 0.5.0\nRustic: 0.11.4\nJobs: 3"
     assert call["notify_type"] == apprise.NotifyType.INFO
     assert sent(metrics, "scheduler_started", "sent") == 1
+
+
+async def test_every_notification_has_an_icon_and_links_the_web_ui(tmp_path):
+    events = ["backup_success", "backup_failure", "backup_skipped"]
+    instance, target, _ = notifier(
+        tmp_path, [True], web_url="https://backup.example/", events=events
+    )
+    instance.submit(result())
+    instance.submit(result(outcome=Outcome.FAILED))
+    instance.submit(result(outcome=Outcome.SKIPPED))
+    instance.submit_startup("0.5.0", "0.11.4", 3)
+    await instance.drain()
+    by_title = {call["title"]: call for call in target.calls}
+    assert set(by_title) == {
+        "✅ backup succeeded: docs",
+        "❌ backup failed: docs",
+        "⚠️ backup skipped: docs",
+        "🚀 rustic-scheduler 0.5.0 started",
+    }
+    assert by_title["✅ backup succeeded: docs"]["notify_type"] == apprise.NotifyType.SUCCESS
+    assert by_title["❌ backup failed: docs"]["notify_type"] == apprise.NotifyType.FAILURE
+    assert by_title["⚠️ backup skipped: docs"]["notify_type"] == apprise.NotifyType.WARNING
+    assert all(
+        call["body"].endswith("\n\nWeb UI: https://backup.example/") for call in target.calls
+    )
+
+
+async def test_real_apprise_delivers_the_icon_and_the_link(tmp_path):
+    received = []
+
+    async def hook(request):
+        received.append(await request.json())
+        return web.Response()
+
+    app = web.Application()
+    app.router.add_post("/hook", hook)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]
+    path = tmp_path / "apprise.conf"
+    path.write_text(f"json://127.0.0.1:{port}/hook\n")
+    cfg = NotificationsConfig(enabled=True, config_files=[path], retries=0)
+    instance = Notifier(cfg, Metrics(), "https://backup.example/")
+    try:
+        assert await instance.send("backup_failure", result(outcome=Outcome.FAILED)) is True
+    finally:
+        await runner.cleanup()
+    [payload] = received
+    assert payload["title"] == "❌ backup failed: docs"
+    assert payload["type"] == "failure"
+    assert payload["message"].endswith("\n\nWeb UI: https://backup.example/")
 
 
 async def test_default_events_cover_backup_results_and_maintenance_failures(tmp_path):

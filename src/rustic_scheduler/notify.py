@@ -27,6 +27,15 @@ log = logging.getLogger(__name__)
 #: selects: it is sent whenever notifications are enabled.
 STARTED_EVENT = "scheduler_started"
 
+#: Icon in front of each title, so the outcome shows at a glance in a notification list
+#: or on a lock screen. Plain Unicode, so it reaches the text-only services as well.
+ICONS = {
+    apprise.NotifyType.SUCCESS: "✅",
+    apprise.NotifyType.WARNING: "⚠️",
+    apprise.NotifyType.FAILURE: "❌",
+    apprise.NotifyType.INFO: "🚀",
+}
+
 
 def event_for(result: OperationResult) -> str:
     """Notification event name for a result."""
@@ -38,7 +47,14 @@ def event_for(result: OperationResult) -> str:
     return f"{kind}_failure"
 
 
-def render(result: OperationResult) -> tuple[str, str]:
+def body_text(lines: list[str], web_url: str | None) -> str:
+    """Joins the lines, adds the link to the web interface if there is one, masks secrets."""
+    if web_url is not None:
+        lines = [*lines, "", f"Web UI: {web_url}"]
+    return REDACTOR("\n".join(lines))
+
+
+def render(result: OperationResult, web_url: str | None = None) -> tuple[str, str]:
     """Title and body. Contains no secrets, paths of sources or command lines."""
     title = f"{result.operation} {result.outcome}: {result.job}"
     lines = [f"Job: {result.job}", f"Operation: {result.operation}", f"Outcome: {result.outcome}"]
@@ -61,13 +77,18 @@ def render(result: OperationResult) -> tuple[str, str]:
         lines.append(f"Snapshots: {verb} {data['removed']}, kept {data.get('kept', '?')}")
     if result.detail:
         lines.append(f"Detail: {result.detail}")
-    return title, REDACTOR("\n".join(lines))
+    return title, body_text(lines, web_url)
 
 
 class Notifier:
-    def __init__(self, config: NotificationsConfig, metrics: Metrics) -> None:
+    def __init__(
+        self, config: NotificationsConfig, metrics: Metrics, web_url: str | None = None
+    ) -> None:
         self.config = config
         self.metrics = metrics
+        #: Public URL of the web interface, linked from every notification. None when the
+        #: web interface is off or has no `public_url`.
+        self.web_url = web_url
         self._tasks: set[asyncio.Task[bool]] = set()
         # Apprise logs target URLs at debug level.
         logging.getLogger("apprise").setLevel(logging.WARNING)
@@ -91,7 +112,10 @@ class Notifier:
 
     def submit_startup(self, scheduler_version: str, rustic_version: str, jobs: int) -> None:
         """Announce that the scheduler is running. Sent in the background."""
-        body = REDACTOR(f"Version: {scheduler_version}\nRustic: {rustic_version}\nJobs: {jobs}")
+        body = body_text(
+            [f"Version: {scheduler_version}", f"Rustic: {rustic_version}", f"Jobs: {jobs}"],
+            self.web_url,
+        )
         self._spawn(
             self._deliver(
                 STARTED_EVENT,
@@ -108,7 +132,7 @@ class Notifier:
         task.add_done_callback(self._tasks.discard)
 
     async def send(self, event: str, result: OperationResult) -> bool:
-        title, body = render(result)
+        title, body = render(result, self.web_url)
         kind = (
             apprise.NotifyType.SUCCESS
             if result.outcome == Outcome.SUCCEEDED
@@ -126,6 +150,7 @@ class Notifier:
         body: str,
         kind: apprise.NotifyType,
     ) -> bool:
+        title = f"{ICONS[kind]} {title}"
         attempts = self.config.retries + 1
         for attempt in range(1, attempts + 1):
             problem = "delivery failed"
