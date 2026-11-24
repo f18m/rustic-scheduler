@@ -52,7 +52,8 @@ One card per job. Under the job's name:
   saved telemetry may show an unknown file count until its startup refresh succeeds; the
   Snapshots tab reads the repository independently.
 
-Then one row per operation that is enabled for it:
+Then one row per operation that is enabled for it, in the order `init`, `backup`, `forget`,
+`prune`, `check`:
 
 - **Operation** and **Description**: what the operation does, with a link to the Rustic
   documentation for the command it runs (`init` links to the `rustic init` chapter). The
@@ -68,6 +69,9 @@ Then one row per operation that is enabled for it:
 - **Run now**, for the operations listed in `web.operations`.
 - **Output** while the operation runs, **Last output** otherwise: opens its run's output
   (see [Run output](#run-output)).
+
+Listing snapshots is not a row. Under the table, a 📂 icon (tooltip "Browse snapshots") opens
+the Snapshots tab with that job chosen.
 
 The page refreshes itself every three seconds (jobs, recent and next runs; not the snapshots).
 

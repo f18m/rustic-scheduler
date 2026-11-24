@@ -13,10 +13,6 @@ const OPERATIONS = {
     text: "Saves the job's sources as a new snapshot.",
     docs: "https://rustic.cli.rs/docs/commands/backup/creating_snapshots.html",
   },
-  snapshots: {
-    text: "Lists the job's snapshots for the telemetry. Changes nothing.",
-    docs: "https://rustic.cli.rs/docs/commands/misc/listing.html",
-  },
   forget: {
     text: "Applies the job's retention rules to its own snapshots and removes the ones they do not keep. The scheduler previews the removal first.",
     docs: "https://rustic.cli.rs/docs/commands/forget/intro.html",
@@ -175,11 +171,19 @@ async function run(job, row, button) {
   refresh();
 }
 
+// The Snapshots tab is opened for one job, from the icon under its table.
+function browseSnapshotsOf(job) {
+  browse.job = job;
+  $("browse-job").value = job;
+  showTab("snapshots");
+}
+
 function renderJobs(data) {
   const now = new Date(data.now);
   const cards = data.jobs.map((job) => {
     const body = el("tbody");
-    for (const row of job.operations) {
+    // Listing snapshots is not a row here: the icon below opens the Snapshots tab.
+    for (const row of job.operations.filter((operation) => operation.operation !== "snapshots")) {
       const action = el("td", { class: "nowrap" });
       if (row.can_run) {
         const button = el("button", { type: "button", text: "Run now", class: row.destructive ? "danger" : "" });
@@ -207,6 +211,12 @@ function renderJobs(data) {
     const facts = [`label ${job.label}`];
     if (job.host) facts.push(`host ${job.host}`);
     if (job.repository_busy) facts.push("repository in use");
+    const browseLink = el("a", { href: "#snapshots", class: "icon-link", text: "📂", title: "Browse snapshots" });
+    browseLink.setAttribute("aria-label", `Browse snapshots of ${job.name}`);
+    browseLink.addEventListener("click", (event) => {
+      event.preventDefault();
+      browseSnapshotsOf(job.name);
+    });
     return el("div", { class: "card" },
       el("div", { class: "card-head" }, el("h3", { text: job.name }), el("span", { class: "small", text: facts.join(" · ") })),
       job.description ? el("p", { class: "description", text: job.description }) : null,
@@ -216,7 +226,8 @@ function renderJobs(data) {
           el("th", { text: "Operation" }), el("th", { text: "Description" }),
           el("th", { text: "State" }), el("th", { text: "Progress / next run" }),
           el("th", { text: "Last result" }), el("th", { text: "" }))),
-        body))
+        body)),
+      el("p", { class: "card-links" }, browseLink)
     );
   });
   $("jobs").replaceChildren(...cards);

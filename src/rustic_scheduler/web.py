@@ -102,6 +102,18 @@ def manual_instructions(engine: Engine, job: str) -> dict[str, Any]:
     }
 
 
+#: The order of the rows on the Jobs tab: set up the repository, back up, remove old
+#: snapshots, then check. ``Operation`` keeps its own order for the other interfaces.
+_JOBS_TAB_ORDER = (
+    Operation.INIT,
+    Operation.BACKUP,
+    Operation.FORGET,
+    Operation.PRUNE,
+    Operation.CHECK,
+    Operation.SNAPSHOTS,
+)
+
+
 def overview(engine: Engine, config: WebConfig, rustic_version: str) -> dict[str, Any]:
     status = engine.status()
     reason = runlogs.unavailable(engine, config)
@@ -110,7 +122,7 @@ def overview(engine: Engine, config: WebConfig, rustic_version: str) -> dict[str
     for name, job in status["jobs"].items():
         enabled = engine.enabled_operations(name)
         rows = []
-        for operation in Operation:
+        for operation in sorted(Operation, key=_JOBS_TAB_ORDER.index):
             row = job["operations"].get(str(operation))
             if row is None and operation not in enabled:
                 continue

@@ -253,9 +253,11 @@ web page and the control socket alike; success only with Rustic's confirmation l
 confirmation is `unknown`; a refusal by Rustic is `failed` and never retried; the page offers
 `init` only when the job allows it and `web.operations` lists it, and it asks before sending.
 
-The web page's jobs table (the Description column, its links and the confirmation text) is
-checked in a simulated DOM, not in a browser. The links were fetched once to confirm that they
-exist; they point at Rustic's online book, which may describe a newer Rustic than 0.11.4.
+The web page's jobs table is checked in a simulated DOM, not in a browser: the Description
+column, its links and the confirmation text, the order of its rows, the missing snapshots row,
+and the Browse snapshots icon that opens the Snapshots tab for a job. The links were fetched
+once to confirm that they exist; they point at Rustic's online book, which may describe a
+newer Rustic than 0.11.4.
 
 ## Verified on the built image
 

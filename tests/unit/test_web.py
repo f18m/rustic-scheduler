@@ -136,7 +136,20 @@ async def test_overview_lists_operations_and_what_may_be_started(site):
     assert row(data, "check")["state"] == "idle"
 
 
-async def test_overview_includes_only_actual_schedules_as_next_runs(site):
+async def test_overview_lists_operations_in_the_order_of_work(site):
+    _, session = await site(
+        job={
+            "allow_init": True,
+            "snapshots": {"enabled": True},
+            "check": {"enabled": True},
+            "forget": {"enabled": True, "keep": {"keep-last": 1}},
+            "prune": {"enabled": True},
+        },
+        operations=["backup", "forget", "prune", "check", "init"],
+    )
+    names = [o["operation"] for o in (await overview(session))["jobs"][0]["operations"]]
+    assert names == ["init", "backup", "forget", "prune", "check", "snapshots"]
+
     engine, session = await site(
         job={
             "schedule": {"days": "daily", "times": ["02:00"]},
