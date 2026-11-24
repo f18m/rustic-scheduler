@@ -70,6 +70,9 @@ code { background: var(--code-bg); padding: 1px 4px; border-radius: 4px; }
 
 .card .description { margin: 0 0 6px; }
 .card .snapshot { margin: 0 0 10px; }
+.card-links { margin: 10px 0 0; }
+.card-links a.icon-link { font-size: 20px; text-decoration: none; }
+.card-links a.icon-link:hover { text-decoration: underline; }
 
 .scroll { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }

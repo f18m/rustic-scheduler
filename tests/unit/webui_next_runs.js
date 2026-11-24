@@ -123,6 +123,30 @@ assert.equal(description.children[0], "Creates a new, empty repository at the jo
 assert.equal(description.children[2].href, "https://rustic.cli.rs/docs/commands/init/intro.html");
 assert.equal(description.children[2].textContent, "Rustic docs");
 assert.equal(rows[0].children[1].children[2].href, "https://rustic.cli.rs/docs/commands/backup/creating_snapshots.html");
+
+// The snapshots operation has no row on the Jobs tab; an icon under the table opens the
+// Snapshots tab with that job chosen.
+context.data = {
+  now: "2026-06-03T10:00:00Z", shutting_down: false,
+  jobs: [{ name: "docs", label: "docs", snapshots: null, repository_busy: false, operations: [
+    { operation: "snapshots", state: "idle", can_run: false, last_result: null, next_run: null, progress: null },
+    { operation: "backup", state: "idle", can_run: true, last_result: null, next_run: null, progress: null },
+  ] }],
+};
+vm.runInContext("renderJobs(data)", context);
+const card = getElementById("jobs").children[0];
+assert.deepEqual(find(card, "tbody").children.map((row) => row.children[0].textContent), ["backup"]);
+const browseLink = card.children.at(-1).children[0];
+assert.equal(browseLink.tag, "a");
+assert.equal(browseLink.title, "Browse snapshots");
+assert.equal(browseLink.attributes["aria-label"], "Browse snapshots of docs");
+let followed = false;
+browseLink.events.click({ preventDefault() { followed = true; } });
+assert.equal(followed, true, "the link does not navigate by itself");
+assert.equal(vm.runInContext("browse.job", context), "docs");
+assert.equal(getElementById("browse-job").value, "docs");
+assert.equal(context.location.hash, "#snapshots");
+
 const asked = [];
 let fetched = false;
 context.window.confirm = (text) => { asked.push(text); return false; };
