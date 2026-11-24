@@ -134,6 +134,56 @@ vm.runInContext('run("docs", { operation: "init" }, { disabled: false })', conte
   assert.equal(fetched, false, "a cancelled init is not requested");
 });
 
+// The "Using Rustic directly" tab: one job at a time, chosen in a list as on the Snapshots tab.
+function all(node, tag) {
+  const hits = node.tag === tag ? [node] : [];
+  for (const child of node.children) {
+    if (child && typeof child === "object") hits.push(...all(child, tag));
+  }
+  return hits;
+}
+const manualJob = (name, host) => ({
+  name,
+  manual: {
+    label: name, host, profiles: `-P /profiles/${name}.toml`, docker_exec: `docker exec ${name}`,
+    scope: `--filter-label ${name}`, env: [`RUSTIC_PASSWORD_FILE=/run/secrets/${name}`],
+  },
+});
+context.data = { rustic_version: "9.9.9", jobs: [manualJob("docs", "nas"), manualJob("photos", null)] };
+vm.runInContext("renderManual(data)", context);
+const picker = getElementById("manual-job");
+const manualPanel = getElementById("manual");
+const commandsShown = () => all(manualPanel, "pre").map((pre) => pre.textContent).join("\n");
+assert.deepEqual(picker.children.map((option) => option.value), ["docs", "photos"]);
+assert.equal(picker.value, "docs");
+assert.equal(manualPanel.children[0].textContent, 'Snapshots of this job carry the label "docs" and the host "nas".');
+assert.match(commandsShown(), /-P \/profiles\/docs\.toml snapshots --filter-label docs/);
+assert.doesNotMatch(commandsShown(), /photos/);
+
+picker.value = "photos";
+picker.events.change();
+assert.match(commandsShown(), /-P \/profiles\/photos\.toml snapshots --filter-label photos/);
+assert.doesNotMatch(commandsShown(), /docs/);
+assert.equal(manualPanel.children[0].textContent, 'Snapshots of this job carry the label "photos".');
+
+// A refresh with nothing changed keeps the selection and the same nodes.
+const shown = manualPanel.children[0];
+vm.runInContext("renderManual(data)", context);
+assert.equal(picker.value, "photos");
+assert.equal(manualPanel.children[0], shown);
+
+// A job removed from the configuration: the first remaining job is chosen.
+context.data = { rustic_version: "9.9.9", jobs: [manualJob("docs", "nas")] };
+vm.runInContext("renderManual(data)", context);
+assert.deepEqual(picker.children.map((option) => option.value), ["docs"]);
+assert.equal(picker.value, "docs");
+assert.match(commandsShown(), /docs\.toml/);
+
+context.data = { rustic_version: "9.9.9", jobs: [] };
+vm.runInContext("renderManual(data)", context);
+assert.equal(picker.children.length, 0);
+assert.equal(manualPanel.children[0].textContent, "No job is configured.");
+
 context.data = {
   version: "test", rustic_version: "test", ready: true, shutting_down: false,
   jobs: [{ name: "new", operations: [

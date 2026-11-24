@@ -155,11 +155,8 @@ button.link {
 }
 button.link:hover { text-decoration: underline; }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
-button:focus-visible, summary:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-details { border-top: 1px solid var(--line); padding: 10px 0; }
-details:first-child { border-top: 0; }
-summary { cursor: pointer; font-weight: 600; }
 .block { margin: 12px 0; }
 .block-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 pre {

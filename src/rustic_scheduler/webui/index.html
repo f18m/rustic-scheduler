@@ -107,9 +107,13 @@
         The repository is an ordinary Rustic repository: you can inspect it and restore from it
         with the <a href="https://rustic.cli.rs/" target="_blank" rel="noopener noreferrer"><code>rustic</code></a>
         command, without the scheduler. The commands below are
-        filled in from each job's configuration. Passwords and credentials are never shown;
-        they stay in the files your profiles and environment point to.
+        filled in from the configuration of the job you choose. Passwords and credentials
+        are never shown; they stay in the files your profiles and environment point to.
       </p>
+      <div class="toolbar">
+        <label for="manual-job">Job</label>
+        <select id="manual-job"></select>
+      </div>
       <div id="manual"></div>
       <ul class="notes">
         <li>
