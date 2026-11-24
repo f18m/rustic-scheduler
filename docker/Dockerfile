@@ -6,7 +6,7 @@
 #   - uv by version and digest, Python packages by uv.lock (hashes)
 # Supported platforms: linux/amd64, linux/arm64.
 
-ARG PYTHON_IMAGE=python:3.13.18-slim-bookworm@sha256:a5a7017efc5969e00ae2b91c8eb0631049a569652aa4ffc4501769049ae45c72
+ARG PYTHON_IMAGE=python:3.13.18-slim-bookworm@sha256:f0fa218d5b06f9b9235024fa061cde2cb141f726de52134471053d2d9b5324a3
 # The package version, normally `scripts/version.sh` (the Git tag). The build has no
 # Git history to derive it from.
 ARG VERSION=0.0.0.dev0
