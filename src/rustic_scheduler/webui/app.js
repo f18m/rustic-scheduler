@@ -26,7 +26,7 @@ const OPERATIONS = {
     docs: "https://rustic.cli.rs/docs/commands/misc/check.html",
   },
   init: {
-    text: "Creates a new, empty repository at the job's location. Rustic refuses if one is already there.",
+    text: "Creates a new, empty repository at the job's location. If one is already there, nothing changes and the run succeeds.",
     docs: "https://rustic.cli.rs/docs/commands/init/intro.html",
   },
 };

@@ -39,8 +39,10 @@ skipped.
   to stderr. The exact field sets are asserted.
 - `percent_done` is a fraction; `seconds_remaining` is omitted when unknown.
 - `rustic init` writes `repository <id> successfully created` to stderr and exits 0; running it
-  on an existing repository exits 1 with `Config file already exists`. A run started by the
-  scheduler succeeds only on the first line (`test_init_creates_the_repository_and_a_second_init_is_refused`).
+  on an existing repository exits 1 with `Config file already exists. Aborting.` on stderr. A run
+  started by the scheduler succeeds on the first line, and on the second it is reported as
+  succeeded with the detail `repository already initialized`
+  (`test_init_creates_the_repository_and_a_second_init_is_refused`).
 - The summary is printed for every successful backup, without `snapshot_id` when no snapshot
   was saved (`--skip-if-unchanged`).
 - Rustic exits with status **0** when stopped by SIGTERM mid-backup, and writes no snapshot.
@@ -250,8 +252,10 @@ integration test, so the two cannot drift apart unnoticed.
 
 Repository creation (`init`): refused without `allow_init`, from the scheduler's trigger, the
 web page and the control socket alike; success only with Rustic's confirmation line; a missing
-confirmation is `unknown`; a refusal by Rustic is `failed` and never retried; the page offers
-`init` only when the job allows it and `web.operations` lists it, and it asks before sending.
+confirmation is `unknown`; a refusal by Rustic because a repository is already there is
+`succeeded` (`repository already initialized`); any other refusal is `failed` and never retried;
+the page offers `init` only when the job allows it and `web.operations` lists it, and it asks
+before sending.
 
 The web page's jobs table is checked in a simulated DOM, not in a browser: the Description
 column, its links and the confirmation text, the order of its rows, the missing snapshots row,

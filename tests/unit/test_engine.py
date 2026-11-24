@@ -1004,12 +1004,20 @@ async def test_init_without_rustics_confirmation_is_unknown_not_succeeded(sandbo
     assert result.outcome == Outcome.UNKNOWN and result.reason == Reason.NO_SUMMARY
 
 
-async def test_init_on_an_existing_repository_fails_with_rustics_message(sandbox):
+async def test_init_on_an_existing_repository_succeeds_as_already_initialized(sandbox):
     sandbox.write_plan(
         {"init": {"exit": 1, "stderr": ["error: Config file already exists. Aborting."]}}
     )
     engine = await sandbox.engine(allow_init(sandbox))
     result = await run(engine, operation=Operation.INIT)
-    assert result.outcome == Outcome.FAILED and result.reason == Reason.EXIT_CODE
-    assert "already exists" in result.detail
+    assert result.outcome == Outcome.SUCCEEDED and result.reason == Reason.NONE
+    assert result.detail == "repository already initialized"
     assert sandbox.commands() == ["init"]  # never retried
+
+
+async def test_init_failing_for_another_reason_still_fails(sandbox):
+    sandbox.write_plan({"init": {"exit": 1, "stderr": ["error: wrong password"]}})
+    engine = await sandbox.engine(allow_init(sandbox))
+    result = await run(engine, operation=Operation.INIT)
+    assert result.outcome == Outcome.FAILED and result.reason == Reason.EXIT_CODE
+    assert "wrong password" in result.detail
