@@ -13,7 +13,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: rustic-scheduler:0.1.0
+    image: ghcr.io/f18m/rustic-scheduler:latest
     # Rustic records the host name in every snapshot and groups snapshots by it.
     # A fixed name keeps that stable when the container is recreated.
     hostname: backup-host
