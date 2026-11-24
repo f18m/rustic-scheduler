@@ -1,4 +1,12 @@
+[![GitHub Tag](https://img.shields.io/github/v/tag/f18m/viessmann-optolink2mqtt)](https://github.com/f18m/viessmann-optolink2mqtt/releases)![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/f18m/rustic-scheduler/ci.yml)
+
 # rustic-scheduler
+
+<div align="center">
+
+⭐ If you find this App useful, please star this repo - it helps others discover the project! ⭐
+
+</div>
 
 A small, Docker-friendly service that runs [Rustic](https://github.com/rustic-rs/rustic)
 backups on a schedule and tells you, truthfully, what happened.
@@ -21,38 +29,16 @@ backups on a schedule and tells you, truthfully, what happened.
 
 Rustic runs as an external process: the pinned release is **Rustic 0.11.4**, unmodified.
 
-> **Status.** Everything described here was exercised against the real Rustic 0.11.4 binary,
-> Pushgateway 1.11.4, Prometheus 3.16.0 and Mosquitto 2.1.2 on local, disposable data.
-> AWS Glacier Deep Archive storage, restores and `check --read-data` have been verified on a
-> production repository. Behaviour of other AWS-specific features (eventual consistency,
-> throttling, IAM policies, pricing) is documented from AWS's documentation and unverified.
-> See [docs/verification.md](docs/verification.md).
 
-## What is on by default, and what can delete data
+## 💡 Why?
 
-| Operation | Default | Effect on the repository |
-|---|---|---|
-| `backup` | on for every job | Adds data and snapshots. Never deletes. |
-| `snapshots` telemetry | **off** | Read-only (`rustic snapshots --json`). |
-| `check` | **off** | Read-only. With `read_data: true` it downloads pack files (cost and delay on cold storage). |
-| `forget` | **off** | **Deletes snapshots** of this job. Needs explicit `keep` rules. |
-| `forget.prune` | **off** | **Deletes repository data** no snapshot uses any more (`forget --prune`). |
-| `prune` | **off** | **Deletes repository data**; acts on the whole repository, not one job. |
-| Repository creation (`init`) | **never** unless `allow_init: true` | Creates a repository. Only on request, and only with `allow_init`: from the web interface (when `web.operations` lists `init`) or `rustic-scheduler trigger JOB init`. |
-| Pushgateway group cleanup | **off** | Deletes stale metric groups in the Pushgateway only. |
-| MQTT, notifications | **off** | None. |
-| MQTT commands | **off** | Lets MQTT messages start `backup` and `check`; `forget` and `prune` only if listed, and only if enabled on the job. |
-| Home Assistant discovery | **off** | None. |
-| Web interface | **off** | Lets its "Run now" buttons start `backup` and `check`; `forget` and `prune` only if listed, and only if enabled on the job. |
-| Web interface: browsing snapshots | **off** | None on the repository (read-only). Shows file names, sizes, times and owners to whoever can open the page. |
-| Web interface: run output | on, when the web interface is on | None (read-only). Shows Rustic's output of each run, secrets masked, to whoever can open the page. |
+I use Rustic to backup my NAS to AWS S3 Cold Storage. 
+Initially I used ad-hoc Bash scripts running on my NAS to do that.
+They did the job but lacked: proper telemetry/observability (backup has completed? when? successfully?), good notification support (e.g. Telegram, email, etc) and flexibility.
+This is why this project was born: make it easy to run backups with Rustic, with no compromise on flexibility and observability.
 
-Nothing that deletes anything runs unless you turn it on in the YAML. Destructive options
-found only in a Rustic profile (for example `[forget] prune = true`) are refused at start-up
-until the YAML agrees. A manual request for `forget` or `prune` on a job where it is not
-enabled is refused too.
 
-## Quick start
+## 🚀 Quick start
 
 Requirements: Docker with Compose. Supported image platforms: `linux/amd64`, `linux/arm64`.
 
@@ -92,7 +78,7 @@ docker compose exec rustic-scheduler rustic-scheduler trigger documents --wait
 
 To try it without AWS, use `examples/profiles/local-test.toml` as the job's profile.
 
-## Configuration in one screen
+## 📋 Configuration in one screen
 
 ```yaml
 scheduler:
@@ -121,59 +107,13 @@ jobs:
   [examples/profiles/](examples/profiles/)
 
 Configuration is validated before any work is scheduled, using the real Rustic binary to
-load your profiles. Every problem is reported at once, with its location and what to do:
+load your profiles. 
 
-```
-error: jobs.documents.schedule.times: cannot read '2:30' as a time; use 24-hour HH:MM such as 02:30
-error: jobs.media: the profiles set [backup] label = 'pics' but the scheduler would pass 'media'
-       and override it. Remove it from the profile or set `label: pics` on the job.
-```
-
-## How it behaves
-
-The short version; details and rationale are in [docs/behaviour.md](docs/behaviour.md).
-
-| Situation | Behaviour |
-|---|---|
-| Two jobs use the same repository | They run one after the other, in arrival order. Never concurrently. |
-| Jobs on different repositories | Run in parallel. |
-| A job is still running at its next scheduled time | The new run is **skipped** and counted. Runs never pile up. |
-| A run waits too long for a busy repository | Skipped after `repository_wait_timeout` (default 6h). |
-| Scheduler was down at a scheduled time | Per job: `catch_up` (default) runs once at start-up if the run is provably missing and within `misfire_grace`; `skip` waits for the next time. |
-| Host suspended, clock jumped forward | All passed occurrences collapse into at most one run. |
-| Clock moved backwards | Nothing runs twice. |
-| Local time that does not exist (spring forward) | Runs once, shifted by the gap (02:30 becomes 03:30). |
-| Local time that occurs twice (fall back) | Runs once, at the first occurrence. |
-| Timeout reached | Rustic gets SIGTERM, then SIGKILL after `stop_grace`. Outcome `failed`. |
-| Container stops | Running Rustic is stopped the same way. Outcome `interrupted`. Queued work is dropped. |
-| Scheduler crashes mid-run | After restart the run is reported as `unknown`, never as success. |
-| Manual run (CLI, or MQTT message or web interface if enabled) | Queues like a scheduled run; refused if that job is already queued or running. |
-
-### Outcomes
-
-Every operation ends in exactly one of five states:
-
-| Outcome | Meaning |
-|---|---|
-| `succeeded` | Rustic exited 0, was not interrupted and, for a backup, reported its summary. |
-| `failed` | Rustic reported an error, timed out, was killed, or could not be started. |
-| `skipped` | The run never started. |
-| `interrupted` | The run started and was stopped by shutdown or a signal. |
-| `unknown` | The run started but its result cannot be established. |
-
-Queued or running is never reported as a result. Rustic's exit status alone is never trusted:
-Rustic 0.11.4 exits with status **0** when it is interrupted by SIGTERM or SIGINT. Telemetry,
-MQTT, notification and Pushgateway delivery results are tracked separately and never change a
-Rustic outcome.
-
-### After a backup
-
-If enabled with `after_backup`, in this order: `check`, then `forget`, then `snapshots`.
+If enabled with `after_backup`, additional operations will be triggered after a backup is completed, in this order: `check`, then `forget`.
 `check` and `forget` only run after a succeeded backup, and `forget` does not run if that
-check failed. Snapshot telemetry always runs. The repository stays locked for the whole
-sequence.
+check failed. The repository stays locked for the whole sequence.
 
-## Observability
+## 🔭 Observability
 
 Prometheus scrapes **two endpoints**. A single combined endpoint is not provided.
 
@@ -193,7 +133,32 @@ heartbeat, not merely "the port answers") and `/api/v1/status` (JSON with full d
 - Web interface (`web.enabled`, port 9301): [docs/web.md](docs/web.md)
 - Notifications: [docs/notifications.md](docs/notifications.md)
 
-## Working on the repository yourself
+## 📋 What is on by default, and what can delete data
+
+| Operation | Default | Effect on the repository |
+|---|---|---|
+| `backup` | on for every job | Adds data and snapshots. Never deletes. |
+| `snapshots` telemetry | **off** | Read-only (`rustic snapshots --json`). |
+| `check` | **off** | Read-only. With `read_data: true` it downloads pack files (cost and delay on cold storage). |
+| `forget` | **off** | **Deletes snapshots** of this job. Needs explicit `keep` rules. |
+| `forget.prune` | **off** | **Deletes repository data** no snapshot uses any more (`forget --prune`). |
+| `prune` | **off** | **Deletes repository data**; acts on the whole repository, not one job. |
+| Repository creation (`init`) | **never** unless `allow_init: true` | Creates a repository. Only on request, and only with `allow_init`: from the web interface (when `web.operations` lists `init`) or `rustic-scheduler trigger JOB init`. |
+| Pushgateway group cleanup | **off** | Deletes stale metric groups in the Pushgateway only. |
+| MQTT, notifications | **off** | None. |
+| MQTT commands | **off** | Lets MQTT messages start `backup` and `check`; `forget` and `prune` only if listed, and only if enabled on the job. |
+| Home Assistant discovery | **off** | None. |
+| Web interface | **off** | Lets its "Run now" buttons start `backup` and `check`; `forget` and `prune` only if listed, and only if enabled on the job. |
+| Web interface: browsing snapshots | **off** | None on the repository (read-only). Shows file names, sizes, times and owners to whoever can open the page. |
+| Web interface: run output | on, when the web interface is on | None (read-only). Shows Rustic's output of each run, secrets masked, to whoever can open the page. |
+
+Nothing that deletes anything runs unless you turn it on in the YAML. Destructive options
+found only in a Rustic profile (for example `[forget] prune = true`) are refused at start-up
+until the YAML agrees. A manual request for `forget` or `prune` on a job where it is not
+enabled is refused too.
+
+
+## 💻 Working on the repository using Rustic CLI
 
 The repository is an ordinary Rustic repository; nothing about it is scheduler-specific.
 Use Rustic directly, from anywhere, with your own profiles. From inside the container, this
@@ -210,7 +175,7 @@ waits for the scheduler's repository lock, so it never overlaps a scheduled oper
 
 The optional [web interface](docs/web.md) shows these commands filled in for each job.
 
-## Commands
+## 💻 Commands
 
 ```
 rustic-scheduler [-c CONFIG] COMMAND
@@ -224,7 +189,7 @@ rustic-scheduler [-c CONFIG] COMMAND
   healthcheck              exit 0 if the scheduler is ready
 ```
 
-## Documentation
+## 📝 Documentation
 
 | Topic | File |
 |---|---|
@@ -242,7 +207,7 @@ rustic-scheduler [-c CONFIG] COMMAND
 | Deployment, upgrades, troubleshooting | [docs/operations.md](docs/operations.md) |
 | What was verified, and what was not | [docs/verification.md](docs/verification.md) |
 
-## Development
+## 🛠️ Development
 
 ```sh
 just setup        # Python dependencies (uv) and the pinned Rustic binary in .tools/
