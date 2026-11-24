@@ -9,7 +9,7 @@
 name: rustic-scheduler
 
 services:
-  rustic-scheduler:
+  sched:
     build:
       context: ..
       dockerfile: docker/Dockerfile

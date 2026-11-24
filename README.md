@@ -80,17 +80,17 @@ jobs:
 EOF
 
 # 3. Create the repository (one time)
-docker compose -f compose.yaml run --rm --entrypoint rustic rustic-scheduler -P /etc/rustic-scheduler/profiles/myrepo.toml init
+docker compose run --rm --entrypoint rustic sched -P /etc/rustic-scheduler/profiles/myrepo.toml init
 
 # 4. Start the scheduler
-docker compose -f compose.yaml up -d
-docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler status
+docker compose up -d
+docker compose exec sched rustic-scheduler status
 
 # 5. Run a backup now (optional)
-docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler trigger mydata --wait
+docker compose exec sched rustic-scheduler trigger mydata --wait
 ```
 
-**To use your own data:** Edit `compose.yaml` and change the `DATA_DIR` environment variable (or the left side of the mount path) to point to your actual folder. The right side must stay `/data/src` to match the configuration.
+**To use your own data:** Edit `docker-compose.yaml` and change the `DATA_DIR` environment variable (or the left side of the mount path) to point to your actual folder. The right side must stay `/data/src` to match the configuration.
 
 ## 📋 Minimal configuration example
 
@@ -121,20 +121,20 @@ Your backups are running on schedule. Here's what you can do:
 **Check status:**
 ```sh
 cd examples
-docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler status
-docker compose -f compose.yaml logs -f rustic-scheduler
+docker compose exec sched rustic-scheduler status
+docker compose logs -f sched
 ```
 
 **View Rustic snapshots and operations:**
 ```sh
 cd examples
-docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler rustic mydata -- snapshots
-docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler rustic mydata -- ls latest
-docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler forget-preview mydata
+docker compose exec sched rustic-scheduler rustic mydata -- snapshots
+docker compose exec sched rustic-scheduler rustic mydata -- ls latest
+docker compose exec sched rustic-scheduler forget-preview mydata
 ```
 
 **Advanced setup** (optional features):
-- **Prometheus metrics:** Uncomment `pushgateway` in `compose.yaml` and configure Prometheus scraping (see [examples/prometheus/](examples/prometheus/))
+- **Prometheus metrics:** Uncomment `pushgateway` in `docker-compose.yaml` and configure Prometheus scraping (see [examples/prometheus/](examples/prometheus/))
 - **Web interface:** Set `web.enabled: true` in config.yaml and open `http://localhost:9301`
 - **MQTT notifications:** Set `mqtt.enabled: true` and connect Home Assistant or other clients
 - **Email/Telegram/etc:** Set `notifications.enabled: true` and configure Apprise (see [docs/notifications.md](docs/notifications.md))
@@ -158,13 +158,13 @@ You can use Rustic directly from anywhere with your own profiles and credentials
 cd examples
 
 # List snapshots
-docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler rustic mydata -- snapshots
+docker compose exec sched rustic-scheduler rustic mydata -- snapshots
 
 # Browse latest snapshot
-docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler rustic mydata -- ls latest
+docker compose exec sched rustic-scheduler rustic mydata -- ls latest
 
 # See what forget would remove (no changes)
-docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler forget-preview mydata
+docker compose exec sched rustic-scheduler forget-preview mydata
 ```
 
 Your repository is a standard Rustic repository; nothing about it is scheduler-specific.
@@ -183,8 +183,8 @@ See all available commands and operations:
 
 ```sh
 cd examples
-docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler --help
-docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler trigger --help
+docker compose exec sched rustic-scheduler --help
+docker compose exec sched rustic-scheduler trigger --help
 ```
 
 ## 📝 Documentation
