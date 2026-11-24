@@ -94,7 +94,7 @@ Metrics say what happened. For why:
 ## Rustic's own metrics and the Pushgateway
 
 Rustic can push metrics about a completed backup to a Pushgateway. With `pushgateway.url`
-set, the scheduler passes it to Rustic as `RUSTIC_PROMETHEUS`, and Rustic 0.11.4 does this
+set, the scheduler passes it to Rustic as `RUSTIC_PROMETHEUS`, and Rustic 0.12.0 does this
 once per snapshot of a backup run:
 
 - one HTTP `POST` to `<url>/metrics/job@base64/<job>/<label>@base64/<value>/...`

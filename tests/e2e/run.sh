@@ -75,7 +75,7 @@ echo "$metrics" | grep -q 'rustic_scheduler_operation_last_outcome{backup_job="d
 echo "$metrics" | grep -q 'rustic_scheduler_operation_last_outcome{backup_job="demo",operation="check",outcome="succeeded"} 1.0' || fail "check outcome metric"
 echo "$metrics" | grep -q 'rustic_scheduler_snapshots{backup_job="demo"} 1.0' || fail "snapshot telemetry metric"
 echo "$metrics" | grep -q 'rustic_scheduler_snapshot_latest_files{backup_job="demo"} 3.0' || fail "latest snapshot file count metric"
-echo "$metrics" | grep -q "rustic_scheduler_info{rustic_version=\"0.11.4\",version=\"$VERSION\"} 1.0" || fail "version in the info metric"
+echo "$metrics" | grep -q "rustic_scheduler_info{rustic_version=\"0.12.0\",version=\"$VERSION\"} 1.0" || fail "version in the info metric"
 echo "$metrics" | grep -q 'rustic_scheduler_pushgateway_push_verified{backup_job="demo"} 1.0' || fail "push verification metric"
 
 step "Prometheus scrapes both endpoints with the example configuration"

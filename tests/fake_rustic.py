@@ -31,7 +31,7 @@ COMMANDS = {
 def main() -> int:
     argv = sys.argv[1:]
     if argv == ["--version"]:
-        print("rustic v0.11.4")
+        print("rustic v0.12.0")
         return 0
     command = next((arg for arg in argv if arg in COMMANDS), "")
     with open(os.environ["FAKE_RUSTIC_PLAN"]) as handle:
@@ -64,7 +64,7 @@ def main() -> int:
                 }
                 handle.write(json.dumps(entry) + "\n")
 
-    def on_term(signum, frame):  # mimic Rustic 0.11.4: log, then exit 0
+    def on_term(signum, frame):  # mimic Rustic 0.12.0: log, then exit 0
         sys.stderr.write("[INFO] Ctrl-C received, shutting down...\n")
         sys.stderr.flush()
         log("interrupted")

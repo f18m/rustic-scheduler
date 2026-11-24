@@ -25,7 +25,7 @@ just build-multiarch  # the same for linux/amd64 and linux/arm64
   repository also publishes its image, tagged `pr-<number>` and `sha-<commit>`, so it can be
   tested in Docker; pushes to the pull request update both tags. Pull requests from forks and
   Dependabot pull requests build the image without publishing it.
-- Reproducibility: base and uv images pinned by digest; Rustic 0.11.4 pinned by SHA-256;
+- Reproducibility: base and uv images pinned by digest; Rustic 0.12.0 pinned by SHA-256;
   Python dependencies installed from `uv.lock` with `--frozen`. The same sources give the
   same dependency set. Image bytes are not bit-for-bit identical between builds (Debian
   packages are installed at build time from the pinned base's package lists).
@@ -137,6 +137,14 @@ To move to another release:
    versions against one repository without checking this.
 
 Running with a different Rustic than the pinned one only produces a warning at start-up.
+
+Rustic 0.12.0 changed two things a configuration may depend on, so check them when moving to it:
+
+- `prune` renamed `--keep-delete` to `--keep-marked`. A `prune.extra_args` that still says
+  `--keep-delete` makes every prune fail.
+- A backup that cannot read a source file exits with status 3. Rustic still saves the snapshot
+  without that file, and the scheduler reports the backup `failed`. With `backup.retries` above 0,
+  each attempt saves another such snapshot. See [behaviour.md](behaviour.md#outcomes).
 
 **Pushgateway, Prometheus, Mosquitto.** Independent of the scheduler; follow their own notes.
 The scheduler uses only the Pushgateway's `/api/v1/metrics` and delete endpoints.

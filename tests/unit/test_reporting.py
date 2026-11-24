@@ -120,9 +120,9 @@ def test_failure_keeps_the_previous_success_timestamp_and_summary():
 
 def test_exposition_is_valid_prometheus_text():
     metrics = Metrics()
-    metrics.info.labels("0.4.0", "0.11.4").set(1)
+    metrics.info.labels("0.4.0", "0.12.0").set(1)
     text = metrics.render().decode()
-    assert 'rustic_scheduler_info{rustic_version="0.11.4",version="0.4.0"} 1.0' in text
+    assert 'rustic_scheduler_info{rustic_version="0.12.0",version="0.4.0"} 1.0' in text
     for line in text.splitlines():
         assert line.startswith("#") or re.match(r"^[a-z_]+(\{.*\})? [0-9.e+-]+$", line), line
 
@@ -209,11 +209,11 @@ async def test_only_selected_events_are_sent(tmp_path):
 
 async def test_startup_is_announced_whatever_events_are_selected(tmp_path):
     instance, target, metrics = notifier(tmp_path, [True], events=["backup_failure"])
-    instance.submit_startup("0.5.0", "0.11.4", 3)
+    instance.submit_startup("0.5.0", "0.12.0", 3)
     await instance.drain()
     [call] = target.calls
     assert call["title"] == "rustic-scheduler 0.5.0 started"
-    assert call["body"] == "Version: 0.5.0\nRustic: 0.11.4\nJobs: 3"
+    assert call["body"] == "Version: 0.5.0\nRustic: 0.12.0\nJobs: 3"
     assert call["notify_type"] == apprise.NotifyType.INFO
     assert sent(metrics, "scheduler_started", "sent") == 1
 

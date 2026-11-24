@@ -1,16 +1,20 @@
 # What was verified, and what was not
 
 This page separates what was run and observed from what is documented on the strength of
-other people's documentation. Versions used: Rustic 0.11.4, Pushgateway 1.11.4, Prometheus
+other people's documentation. Versions used: Rustic 0.12.0, Pushgateway 1.11.4, Prometheus
 3.16.0, Mosquitto 2.1.2, Versity S3 Gateway 1.10.0, Apprise 2.2.0, Python 3.13.
 
 All of it ran on local, disposable data. No production system and no real backup repository
-were touched. AWS Glacier was verified on a real production S3 repository with Deep Archive storage.
+were touched by the tests. AWS Glacier was verified on a real production S3 repository with Deep
+Archive storage, but with Rustic 0.11.4, before the upgrade to 0.12.0.
 
 ## Verified against AWS Glacier
 
+These results are for Rustic 0.11.4. The production repository has not been run with 0.12.0;
+the S3 tests against a local server below do run with 0.12.0.
+
 **Real backup repository with S3 Deep Archive storage.** The following operations were run on
-production data with real costs:
+production data with real costs, with Rustic 0.11.4:
 
 | Topic | Status |
 |---|---|
@@ -28,9 +32,9 @@ What was NOT tested on AWS:
 - S3 behaviours that local servers don't reproduce: eventual consistency, throttling, multipart upload limits, Object Lock, versioning
 - Credential sources other than a shared credentials file with static keys (`AWS_PROFILE`, web identity, ECS, EC2 metadata, session tokens)
 
-## Verified against the real Rustic 0.11.4 binary
+## Verified against the real Rustic 0.12.0 binary
 
-By the integration tests in `tests/integration/` (42 tests), which CI runs with nothing
+By the integration tests in `tests/integration/` (51 tests), which CI runs with nothing
 skipped.
 
 **Rustic facts the design relies on**
@@ -62,6 +66,16 @@ skipped.
 - `backup --time` sets the snapshot time, so two snapshots can have exactly the same time;
   snapshot telemetry succeeds on such a listing and reports both.
 - Missing source, wrong password, missing repository and invalid profile all exit non-zero.
+- An unreadable source file: Rustic exits with status 3 and still saves a snapshot without that
+  file; the scheduler reports `failed` (`test_unreadable_source_file_...`). Not run as root.
+- An `[init]` section in a profile creates no repository: a backup of a missing repository
+  fails and leaves it absent (`test_an_init_section_in_a_profile_creates_no_repository`).
+- `prune --keep-delete` (the name before 0.12.0) is refused as an unexpected argument; the
+  scheduler's prune test uses `--keep-marked`.
+- `status` progress objects carry an `error_count` field since 0.12.0, which the scheduler does
+  not read; the field set is asserted.
+- `ls --json` still prints names only (checked by hand, not by a test; the scheduler uses
+  `cat tree` for file metadata).
 - `check --read-data` exits non-zero on a damaged pack file.
 
 **Scheduler behaviour with real Rustic**
@@ -151,7 +165,7 @@ detected.
   route succeed with `trigger: web` and appear in the history; the "plain Rustic" commands
   of the manual panel, run as printed against the real binary, list only that job's
   snapshot, list its files, pass `check`, and restore a file. `restore --dry-run` restores no
-  file, but Rustic 0.11.4 does create the empty target directory.
+  file, but Rustic 0.12.0 does create the empty target directory.
 - With the scripted stand-in (unit tests): the job description and the latest snapshot's
   size and file count in the overview, kept after a later failed collection and absent
   while telemetry is off.
@@ -232,7 +246,7 @@ one directory, on a slow or remote repository, or in a repository with cold stor
 
 ## Verified with a scripted stand-in for Rustic
 
-The unit tests in `tests/unit/` (235 tests) cover logic that needs precise control over
+The unit tests in `tests/unit/` (323 tests) cover logic that needs precise control over
 timing and failure: configuration validation and error messages, including refusing a
 label shared by two jobs unless both set different hosts; schedule arithmetic across
 time zones and both DST transitions; command construction; profile conflict analysis; the
@@ -255,7 +269,7 @@ confirmation is `unknown`; a refusal by Rustic is `failed` and never retried; th
 
 The web page's jobs table (the Description column, its links and the confirmation text) is
 checked in a simulated DOM, not in a browser. The links were fetched once to confirm that they
-exist; they point at Rustic's online book, which may describe a newer Rustic than 0.11.4.
+exist; they point at Rustic's online book, which may describe a newer Rustic than 0.12.0.
 
 ## Verified on the built image
 
@@ -272,9 +286,9 @@ exist; they point at Rustic's online book, which may describe a newer Rustic tha
 - `docker stop` ends the scheduler with status 0, and results are restored after restart;
 - the repository password does not appear in the logs.
 
-The image was built for `linux/arm64` (and tested as above) and for `linux/amd64` (built
-under emulation; `rustic --version` and `rustic-scheduler --version` run). The end-to-end
-script was not run on amd64 hardware.
+With Rustic 0.12.0, `just e2e` ran on an x86_64 Linux host, so it covers the `linux/amd64` image
+natively. The `linux/arm64` image has not been rebuilt or tested for 0.12.0; for 0.11.4 it was
+tested on arm64 hardware, and the `linux/amd64` image was built under emulation.
 
 ## Other things not verified
 

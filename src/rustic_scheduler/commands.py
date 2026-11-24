@@ -79,7 +79,7 @@ def tree_command(runtime: JobRuntime, snapshot: str, path: str) -> list[str]:
     """`rustic cat tree`: one directory of a snapshot, with each entry's metadata.
 
     Read-only. Used by the web interface's file browser, because `rustic ls --json`
-    prints names only (Rustic 0.11.4). The caller checks that ``snapshot`` is one of
+    prints names only (Rustic 0.12.0). The caller checks that ``snapshot`` is one of
     the job's own snapshots; it is passed as a single argument, never through a shell.
     """
     return [runtime.binary, *runtime.base_args, "cat", "tree", f"{snapshot}:{path}"]

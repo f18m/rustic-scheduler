@@ -19,12 +19,13 @@ backups on a schedule and tells you, truthfully, what happened.
 - Optional snapshot telemetry, retention (`forget`), `prune` and `check`.
 - No database. History lives in Rustic's snapshots and in Prometheus.
 
-Rustic runs as an external process: the pinned release is **Rustic 0.11.4**, unmodified.
+Rustic runs as an external process: the pinned release is **Rustic 0.12.0**, unmodified.
 
-> **Status.** Everything described here was exercised against the real Rustic 0.11.4 binary,
+> **Status.** Everything described here was exercised against the real Rustic 0.12.0 binary,
 > Pushgateway 1.11.4, Prometheus 3.16.0 and Mosquitto 2.1.2 on local, disposable data.
 > AWS Glacier Deep Archive storage, restores and `check --read-data` have been verified on a
-> production repository. Behaviour of other AWS-specific features (eventual consistency,
+> production repository with Rustic 0.11.4, before the upgrade to 0.12.0; that repository has
+> not been checked with 0.12.0. Behaviour of other AWS-specific features (eventual consistency,
 > throttling, IAM policies, pricing) is documented from AWS's documentation and unverified.
 > See [docs/verification.md](docs/verification.md).
 
@@ -162,7 +163,7 @@ Every operation ends in exactly one of five states:
 | `unknown` | The run started but its result cannot be established. |
 
 Queued or running is never reported as a result. Rustic's exit status alone is never trusted:
-Rustic 0.11.4 exits with status **0** when it is interrupted by SIGTERM or SIGINT. Telemetry,
+Rustic 0.12.0 exits with status **0** when it is interrupted by SIGTERM or SIGINT. Telemetry,
 MQTT, notification and Pushgateway delivery results are tracked separately and never change a
 Rustic outcome.
 

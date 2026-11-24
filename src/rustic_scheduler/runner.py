@@ -1,6 +1,6 @@
 """Runs one Rustic process and reports what happened, without interpreting it.
 
-Verified against Rustic 0.11.4:
+Verified against Rustic 0.12.0:
 
 * stdout carries newline-delimited JSON when `--json-progress` is set
   (`message_type` is `status` or `summary`); logs go to stderr.
