@@ -19,9 +19,9 @@ Open `http://<host>:9301/`. With the example Compose file, publish the port firs
 commented out in `compose.yaml`).
 
 Set `web.public_url` to the externally reachable HTTP(S) URL to include a link in Home
-Assistant MQTT discovery when both features are enabled. This can differ from the listen
-address and port when using Docker or a reverse proxy. The URL must not contain credentials,
-a query or a fragment.
+Assistant MQTT discovery and in every notification when the web interface is enabled. This can
+differ from the listen address and port when using Docker or a reverse proxy. The URL must not
+contain credentials, a query or a fragment.
 
 The URL is the directory the page is served from, so it ends with `/`; the scheduler adds
 the slash when it is missing (`https://example.com/backup` becomes

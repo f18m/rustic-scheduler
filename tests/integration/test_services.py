@@ -586,10 +586,10 @@ async def test_apprise_delivers_success_and_failure_notifications(real, webhook)
     await notifier.drain()
 
     titles = {item["title"]: item for item in received}
-    assert set(titles) == {"backup succeeded: good", "backup failed: bad"}
-    success = titles["backup succeeded: good"]
+    assert set(titles) == {"✅ backup succeeded: good", "❌ backup failed: bad"}
+    success = titles["✅ backup succeeded: good"]
     assert success["type"] == "success" and "2 new, 0 changed" in success["message"]
-    failure = titles["backup failed: bad"]
+    failure = titles["❌ backup failed: bad"]
     assert failure["type"] == "failure" and "Reason: exit_code" in failure["message"]
     assert "integration-test-password" not in json.dumps(received)
     sent = {"event": "backup_success", "result": "sent"}
