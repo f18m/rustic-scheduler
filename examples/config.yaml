@@ -29,7 +29,7 @@ http:
 web:
   enabled: false
   port: 9301                       # also publish it in compose.yaml
-  # public_url: https://backup.example.com/   # link in Home Assistant discovery
+  # public_url: https://backup.example.com/   # link in Home Assistant discovery and notifications
   operations: [backup, check]      # add `forget` only if that is acceptable
   auth:
     enabled: false                 # set to true to require HTTP Basic authentication

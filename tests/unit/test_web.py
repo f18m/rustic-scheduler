@@ -136,7 +136,20 @@ async def test_overview_lists_operations_and_what_may_be_started(site):
     assert row(data, "check")["state"] == "idle"
 
 
-async def test_overview_includes_only_actual_schedules_as_next_runs(site):
+async def test_overview_lists_operations_in_the_order_of_work(site):
+    _, session = await site(
+        job={
+            "allow_init": True,
+            "snapshots": {"enabled": True},
+            "check": {"enabled": True},
+            "forget": {"enabled": True, "keep": {"keep-last": 1}},
+            "prune": {"enabled": True},
+        },
+        operations=["backup", "forget", "prune", "check", "init"],
+    )
+    names = [o["operation"] for o in (await overview(session))["jobs"][0]["operations"]]
+    assert names == ["init", "backup", "forget", "prune", "check", "snapshots"]
+
     engine, session = await site(
         job={
             "schedule": {"days": "daily", "times": ["02:00"]},
@@ -973,6 +986,18 @@ async def test_init_runs_from_the_page_when_the_job_allows_it_and_web_lists_it(s
     await engine.wait_idle()
     result = engine.last_results[("docs", Operation.INIT)]
     assert result.outcome == Outcome.SUCCEEDED and result.trigger == "web"
+
+
+async def test_init_on_an_existing_repository_is_shown_as_succeeded(site):
+    engine, session = await site(
+        job={"allow_init": True},
+        plan={"init": {"exit": 1, "stderr": ["error: Config file already exists. Aborting."]}},
+        operations=["backup", "check", "init"],
+    )
+    async with session.post("/api/v1/jobs/docs/init/run", headers=SENT) as response:
+        assert response.status == 202
+    await engine.wait_idle()
+    assert row(await overview(session), "init")["last_result"]["outcome"] == "succeeded"
 
 
 async def test_init_is_not_offered_when_web_operations_do_not_list_it(site):

@@ -52,6 +52,8 @@ ON_TIME = timedelta(seconds=60)
 _FRACTION = re.compile(r"(\.\d{6})\d+")
 #: Rustic 0.12.0's line after a successful `init`, e.g. "repository 158f497f successfully created."
 _INIT_CREATED = re.compile(r"repository \S+ successfully created")
+#: Rustic 0.12.0's refusal of `init` when the repository is already there (exit status 1).
+_INIT_EXISTS = re.compile(r"Config file already exists\. Aborting\.")
 _NO_RETRY = {Reason.TIMEOUT, Reason.SCOPE_VIOLATION, Reason.REMOVAL_LIMIT, Reason.SPAWN_ERROR}
 _AFTER_BACKUP_ORDER = (Operation.CHECK, Operation.FORGET, Operation.SNAPSHOTS)
 
@@ -951,7 +953,8 @@ class Engine:
     async def _init(self, runtime: JobRuntime, fd: int | None, log_file: Any) -> Attempt:
         """Rustic prints no summary for init, so its exit status 0 is not enough: an
         interrupted Rustic also exits 0. The success line is what Rustic prints when it
-        has written the repository."""
+        has written the repository. A repository that is already there is a success too:
+        Rustic refuses to write a second one, and the repository is what the job wants."""
         process = await self._process(
             runtime,
             commands.init_command(runtime),
@@ -961,6 +964,17 @@ class Engine:
             mode="ndjson",
         )
         problem = classify(process)
+        # Only a plain non-zero exit counts: a killed or interrupted Rustic is never a success.
+        if (
+            problem is not None
+            and problem.reason == Reason.EXIT_CODE
+            and any(_INIT_EXISTS.search(line) for line in process.stderr_tail)
+        ):
+            return Attempt(
+                Outcome.SUCCEEDED,
+                exit_code=process.exit_code,
+                detail="repository already initialized",
+            )
         if problem is not None:
             return problem
         if not any(_INIT_CREATED.search(line) for line in process.stderr_tail):

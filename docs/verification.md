@@ -43,8 +43,10 @@ skipped.
   to stderr. The exact field sets are asserted.
 - `percent_done` is a fraction; `seconds_remaining` is omitted when unknown.
 - `rustic init` writes `repository <id> successfully created` to stderr and exits 0; running it
-  on an existing repository exits 1 with `Config file already exists`. A run started by the
-  scheduler succeeds only on the first line (`test_init_creates_the_repository_and_a_second_init_is_refused`).
+  on an existing repository exits 1 with `Config file already exists. Aborting.` on stderr. A run
+  started by the scheduler succeeds on the first line, and on the second it is reported as
+  succeeded with the detail `repository already initialized`
+  (`test_init_creates_the_repository_and_a_second_init_is_refused`).
 - The summary is printed for every successful backup, without `snapshot_id` when no snapshot
   was saved (`--skip-if-unchanged`).
 - Rustic exits with status **0** when stopped by SIGTERM mid-backup, and writes no snapshot.
@@ -189,6 +191,9 @@ detected.
 - With Node.js and a simulated DOM (unit test, skipped when Node.js is unavailable): the
   Next runs tab, chronological ordering across timezones, exclusion of unscheduled
   operations, refresh, empty state and keyboard navigation. This is not a browser test.
+- With Node.js and a simulated DOM: the Using Rustic directly tab shows only the job chosen in
+  its Job list, keeps the choice and the text across refreshes, and falls back to the first
+  job when the chosen one is removed; no job configured. This is not a browser test.
 - With Node.js and a simulated DOM: snapshot timestamps are plain text and each Browse
   button selects its snapshot and requests its initial directory; the empty list spans all
   columns. This is not a browser test.
@@ -234,6 +239,9 @@ one directory, on a slow or remote repository, or in a repository with cold stor
 
 - Success and failure notifications delivered with the documented content.
 - The start-up notification delivered with the documented content, with no events selected.
+- The icon in the title and the `Web UI:` link as the JSON webhook receives them. The link is
+  checked with the web interface enabled with `public_url` and with it disabled (start-up
+  notification); a failed backup's notification is checked with the link.
 - An unreachable target: backup still `succeeded`, failure counted, token absent from logs.
 
 **S3** (real Rustic against a local S3 server)
@@ -246,7 +254,7 @@ one directory, on a slow or remote repository, or in a repository with cold stor
 
 ## Verified with a scripted stand-in for Rustic
 
-The unit tests in `tests/unit/` (323 tests) cover logic that needs precise control over
+The unit tests in `tests/unit/` (328 tests) cover logic that needs precise control over
 timing and failure: configuration validation and error messages, including refusing a
 label shared by two jobs unless both set different hosts; schedule arithmetic across
 time zones and both DST transitions; command construction; profile conflict analysis; the
@@ -255,7 +263,7 @@ reason; retries; after-backup ordering and its skip rules; all forget safeguards
 queueing, lock time-outs and the external lock file; shutdown; crash recovery and state
 restore; on-time, late, missed and collapsed runs with a controllable clock; catch-up
 evidence rules; metric label bounds and unknown-as-absent; notification selection, retry and
-time-out; the start-up log line and start-up notification; Pushgateway verification results; health and readiness following the loop; the
+time-out; notification icons and the web link; the start-up log line and start-up notification; Pushgateway verification results; health and readiness following the loop; the
 network port being unable to start jobs; MQTT queueing without a broker; secret masking; MQTT
 command validation and refusals; the content of the Home Assistant discovery messages.
 
@@ -264,12 +272,16 @@ integration test, so the two cannot drift apart unnoticed.
 
 Repository creation (`init`): refused without `allow_init`, from the scheduler's trigger, the
 web page and the control socket alike; success only with Rustic's confirmation line; a missing
-confirmation is `unknown`; a refusal by Rustic is `failed` and never retried; the page offers
-`init` only when the job allows it and `web.operations` lists it, and it asks before sending.
+confirmation is `unknown`; a refusal by Rustic because a repository is already there is
+`succeeded` (`repository already initialized`); any other refusal is `failed` and never retried;
+the page offers `init` only when the job allows it and `web.operations` lists it, and it asks
+before sending.
 
-The web page's jobs table (the Description column, its links and the confirmation text) is
-checked in a simulated DOM, not in a browser. The links were fetched once to confirm that they
-exist; they point at Rustic's online book, which may describe a newer Rustic than 0.12.0.
+The web page's jobs table is checked in a simulated DOM, not in a browser: the Description
+column, its links and the confirmation text, the order of its rows, the missing snapshots row,
+and the Browse snapshots icon that opens the Snapshots tab for a job. The links were fetched
+once to confirm that they exist; they point at Rustic's online book, which may describe a
+newer Rustic than 0.12.0.
 
 ## Verified on the built image
 

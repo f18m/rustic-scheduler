@@ -13,10 +13,6 @@ const OPERATIONS = {
     text: "Saves the job's sources as a new snapshot.",
     docs: "https://rustic.cli.rs/docs/commands/backup/creating_snapshots.html",
   },
-  snapshots: {
-    text: "Lists the job's snapshots for the telemetry. Changes nothing.",
-    docs: "https://rustic.cli.rs/docs/commands/misc/listing.html",
-  },
   forget: {
     text: "Applies the job's retention rules to its own snapshots and removes the ones they do not keep. The scheduler previews the removal first.",
     docs: "https://rustic.cli.rs/docs/commands/forget/intro.html",
@@ -30,7 +26,7 @@ const OPERATIONS = {
     docs: "https://rustic.cli.rs/docs/commands/misc/check.html",
   },
   init: {
-    text: "Creates a new, empty repository at the job's location. Rustic refuses if one is already there.",
+    text: "Creates a new, empty repository at the job's location. If one is already there, nothing changes and the run succeeds.",
     docs: "https://rustic.cli.rs/docs/commands/init/intro.html",
   },
 };
@@ -175,11 +171,19 @@ async function run(job, row, button) {
   refresh();
 }
 
+// The Snapshots tab is opened for one job, from the icon under its table.
+function browseSnapshotsOf(job) {
+  browse.job = job;
+  $("browse-job").value = job;
+  showTab("snapshots");
+}
+
 function renderJobs(data) {
   const now = new Date(data.now);
   const cards = data.jobs.map((job) => {
     const body = el("tbody");
-    for (const row of job.operations) {
+    // Listing snapshots is not a row here: the icon below opens the Snapshots tab.
+    for (const row of job.operations.filter((operation) => operation.operation !== "snapshots")) {
       const action = el("td", { class: "nowrap" });
       if (row.can_run) {
         const button = el("button", { type: "button", text: "Run now", class: row.destructive ? "danger" : "" });
@@ -207,6 +211,12 @@ function renderJobs(data) {
     const facts = [`label ${job.label}`];
     if (job.host) facts.push(`host ${job.host}`);
     if (job.repository_busy) facts.push("repository in use");
+    const browseLink = el("a", { href: "#snapshots", class: "icon-link", text: "📂", title: "Browse snapshots" });
+    browseLink.setAttribute("aria-label", `Browse snapshots of ${job.name}`);
+    browseLink.addEventListener("click", (event) => {
+      event.preventDefault();
+      browseSnapshotsOf(job.name);
+    });
     return el("div", { class: "card" },
       el("div", { class: "card-head" }, el("h3", { text: job.name }), el("span", { class: "small", text: facts.join(" · ") })),
       job.description ? el("p", { class: "description", text: job.description }) : null,
@@ -216,7 +226,8 @@ function renderJobs(data) {
           el("th", { text: "Operation" }), el("th", { text: "Description" }),
           el("th", { text: "State" }), el("th", { text: "Progress / next run" }),
           el("th", { text: "Last result" }), el("th", { text: "" }))),
-        body))
+        body)),
+      el("p", { class: "card-links" }, browseLink)
     );
   });
   $("jobs").replaceChildren(...cards);
@@ -285,40 +296,55 @@ function block(title, text) {
     el("pre", { text }));
 }
 
-let manualKey = "";
+// The job shown in "Using Rustic directly" is chosen in a list, as on the Snapshots tab.
+const manual = { job: null, jobs: "", key: "", data: null };
 function renderManual(data) {
-  // Rebuilt only when it changes, so that open sections and selections survive the refresh.
-  const key = JSON.stringify(data.jobs.map((job) => [job.name, job.manual])) + data.rustic_version;
-  if (key === manualKey) return;
-  manualKey = key;
-  const sections = data.jobs.map((job, index) => {
-    const m = job.manual;
-    const plain = `rustic ${m.profiles}`;
-    const dockerExec = [
-      "docker exec -ti <rustic-scheduler-container> bash",
-      m.docker_exec + " snapshots " + m.scope,
-      "# or instead of 'snapshots' use: ls SNAPSHOT_ID",
-      "# or: check",
-      "# or: restore --dry-run SNAPSHOT_ID /restore/target",
-      "# or: restore SNAPSHOT_ID:/path/in/snapshot /restore/target",
-    ].join("\n");
-    const direct = [
-      ...m.env.map((line) => `export ${line}`),
-      `${plain} snapshots ${m.scope}`,
-      `${plain} ls SNAPSHOT_ID`,
-      `${plain} check`,
-      `${plain} restore --dry-run SNAPSHOT_ID /restore/target`,
-      `${plain} restore SNAPSHOT_ID:/path/in/snapshot /restore/target`,
-    ].join("\n");
-    return el("details", { open: index === 0 },
-      el("summary", { text: job.name }),
-      el("p", { class: "small", text:
-        `Snapshots of this job carry the label "${m.label}"` + (m.host ? ` and the host "${m.host}".` : ".") }),
-      block("In the scheduler's container (with environment variables from your config; replace <rustic-scheduler-container> with the container name or ID)", dockerExec),
-      block(`With plain Rustic ${data.rustic_version}, in the container or on any machine that has these profile files and the secrets they refer to (adjust the paths)`, direct));
-  });
-  $("manual").replaceChildren(el("div", { class: "card" }, ...sections));
+  manual.data = data;
+  const names = data.jobs.map((job) => job.name);
+  if (JSON.stringify(names) !== manual.jobs) {
+    manual.jobs = JSON.stringify(names);
+    $("manual-job").replaceChildren(...names.map((name) => el("option", { value: name, text: name })));
+    if (!names.includes(manual.job)) manual.job = names[0] || null;
+    $("manual-job").value = manual.job;
+  }
+  // Rebuilt only when it changes, so that the text and the selection survive the refresh.
+  const job = data.jobs.find((item) => item.name === manual.job);
+  const key = JSON.stringify([manual.job, job && job.manual, data.rustic_version]);
+  if (key === manual.key) return;
+  manual.key = key;
+  if (!job) {
+    $("manual").replaceChildren(el("p", { class: "muted", text: "No job is configured." }));
+    return;
+  }
+  const m = job.manual;
+  const plain = `rustic ${m.profiles}`;
+  const dockerExec = [
+    "docker exec -ti <rustic-scheduler-container> bash",
+    m.docker_exec + " snapshots " + m.scope,
+    "# or instead of 'snapshots' use: ls SNAPSHOT_ID",
+    "# or: check",
+    "# or: restore --dry-run SNAPSHOT_ID /restore/target",
+    "# or: restore SNAPSHOT_ID:/path/in/snapshot /restore/target",
+  ].join("\n");
+  const direct = [
+    ...m.env.map((line) => `export ${line}`),
+    `${plain} snapshots ${m.scope}`,
+    `${plain} ls SNAPSHOT_ID`,
+    `${plain} check`,
+    `${plain} restore --dry-run SNAPSHOT_ID /restore/target`,
+    `${plain} restore SNAPSHOT_ID:/path/in/snapshot /restore/target`,
+  ].join("\n");
+  $("manual").replaceChildren(
+    el("p", { class: "small", text:
+      `Snapshots of this job carry the label "${m.label}"` + (m.host ? ` and the host "${m.host}".` : ".") }),
+    block("In the scheduler's container (with environment variables from your config; replace <rustic-scheduler-container> with the container name or ID)", dockerExec),
+    block(`With plain Rustic ${data.rustic_version}, in the container or on any machine that has these profile files and the secrets they refer to (adjust the paths)`, direct));
 }
+$("manual-job").addEventListener("change", () => {
+  manual.job = $("manual-job").value;
+  manual.key = "";
+  renderManual(manual.data);
+});
 
 // ------------------------------------------------------------------ tabs
 

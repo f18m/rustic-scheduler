@@ -119,10 +119,34 @@ const rows = find(getElementById("jobs"), "tbody").children;
 assert.equal(rows.length, 2);
 assert.equal(rows[1].children[0].textContent, "init");
 const description = rows[1].children[1];
-assert.equal(description.children[0], "Creates a new, empty repository at the job's location. Rustic refuses if one is already there.");
+assert.equal(description.children[0], "Creates a new, empty repository at the job's location. If one is already there, nothing changes and the run succeeds.");
 assert.equal(description.children[2].href, "https://rustic.cli.rs/docs/commands/init/intro.html");
 assert.equal(description.children[2].textContent, "Rustic docs");
 assert.equal(rows[0].children[1].children[2].href, "https://rustic.cli.rs/docs/commands/backup/creating_snapshots.html");
+
+// The snapshots operation has no row on the Jobs tab; an icon under the table opens the
+// Snapshots tab with that job chosen.
+context.data = {
+  now: "2026-06-03T10:00:00Z", shutting_down: false,
+  jobs: [{ name: "docs", label: "docs", snapshots: null, repository_busy: false, operations: [
+    { operation: "snapshots", state: "idle", can_run: false, last_result: null, next_run: null, progress: null },
+    { operation: "backup", state: "idle", can_run: true, last_result: null, next_run: null, progress: null },
+  ] }],
+};
+vm.runInContext("renderJobs(data)", context);
+const card = getElementById("jobs").children[0];
+assert.deepEqual(find(card, "tbody").children.map((row) => row.children[0].textContent), ["backup"]);
+const browseLink = card.children.at(-1).children[0];
+assert.equal(browseLink.tag, "a");
+assert.equal(browseLink.title, "Browse snapshots");
+assert.equal(browseLink.attributes["aria-label"], "Browse snapshots of docs");
+let followed = false;
+browseLink.events.click({ preventDefault() { followed = true; } });
+assert.equal(followed, true, "the link does not navigate by itself");
+assert.equal(vm.runInContext("browse.job", context), "docs");
+assert.equal(getElementById("browse-job").value, "docs");
+assert.equal(context.location.hash, "#snapshots");
+
 const asked = [];
 let fetched = false;
 context.window.confirm = (text) => { asked.push(text); return false; };
@@ -133,6 +157,56 @@ vm.runInContext('run("docs", { operation: "init" }, { disabled: false })', conte
   assert.match(asked[0], /init creates a new repository/);
   assert.equal(fetched, false, "a cancelled init is not requested");
 });
+
+// The "Using Rustic directly" tab: one job at a time, chosen in a list as on the Snapshots tab.
+function all(node, tag) {
+  const hits = node.tag === tag ? [node] : [];
+  for (const child of node.children) {
+    if (child && typeof child === "object") hits.push(...all(child, tag));
+  }
+  return hits;
+}
+const manualJob = (name, host) => ({
+  name,
+  manual: {
+    label: name, host, profiles: `-P /profiles/${name}.toml`, docker_exec: `docker exec ${name}`,
+    scope: `--filter-label ${name}`, env: [`RUSTIC_PASSWORD_FILE=/run/secrets/${name}`],
+  },
+});
+context.data = { rustic_version: "9.9.9", jobs: [manualJob("docs", "nas"), manualJob("photos", null)] };
+vm.runInContext("renderManual(data)", context);
+const picker = getElementById("manual-job");
+const manualPanel = getElementById("manual");
+const commandsShown = () => all(manualPanel, "pre").map((pre) => pre.textContent).join("\n");
+assert.deepEqual(picker.children.map((option) => option.value), ["docs", "photos"]);
+assert.equal(picker.value, "docs");
+assert.equal(manualPanel.children[0].textContent, 'Snapshots of this job carry the label "docs" and the host "nas".');
+assert.match(commandsShown(), /-P \/profiles\/docs\.toml snapshots --filter-label docs/);
+assert.doesNotMatch(commandsShown(), /photos/);
+
+picker.value = "photos";
+picker.events.change();
+assert.match(commandsShown(), /-P \/profiles\/photos\.toml snapshots --filter-label photos/);
+assert.doesNotMatch(commandsShown(), /docs/);
+assert.equal(manualPanel.children[0].textContent, 'Snapshots of this job carry the label "photos".');
+
+// A refresh with nothing changed keeps the selection and the same nodes.
+const shown = manualPanel.children[0];
+vm.runInContext("renderManual(data)", context);
+assert.equal(picker.value, "photos");
+assert.equal(manualPanel.children[0], shown);
+
+// A job removed from the configuration: the first remaining job is chosen.
+context.data = { rustic_version: "9.9.9", jobs: [manualJob("docs", "nas")] };
+vm.runInContext("renderManual(data)", context);
+assert.deepEqual(picker.children.map((option) => option.value), ["docs"]);
+assert.equal(picker.value, "docs");
+assert.match(commandsShown(), /docs\.toml/);
+
+context.data = { rustic_version: "9.9.9", jobs: [] };
+vm.runInContext("renderManual(data)", context);
+assert.equal(picker.children.length, 0);
+assert.equal(manualPanel.children[0].textContent, "No job is configured.");
 
 context.data = {
   version: "test", rustic_version: "test", ready: true, shutting_down: false,

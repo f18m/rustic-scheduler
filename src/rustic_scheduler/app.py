@@ -180,7 +180,12 @@ async def serve(config_path: Path) -> int:
     metrics.info.labels(__version__, version).set(1)
     state = StateStore(config.scheduler.state_dir, config.scheduler.run_logs_per_operation)
     mqtt = MqttPublisher(config.mqtt, metrics) if config.mqtt.enabled else None
-    notifier = Notifier(config.notifications, metrics) if config.notifications.enabled else None
+    web_url = None
+    if config.web.enabled and config.web.public_url is not None:
+        web_url = str(config.web.public_url)
+    notifier = (
+        Notifier(config.notifications, metrics, web_url) if config.notifications.enabled else None
+    )
     engine = Engine(config, runtimes, metrics, state, mqtt=mqtt, notifier=notifier)
     server = HttpServer(engine, config.http.host, config.http.port, state.control_socket)
     web = WebServer(engine, config.web, version) if config.web.enabled else None

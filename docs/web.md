@@ -19,9 +19,9 @@ Open `http://<host>:9301/`. With the example Compose file, publish the port firs
 commented out in `compose.yaml`).
 
 Set `web.public_url` to the externally reachable HTTP(S) URL to include a link in Home
-Assistant MQTT discovery when both features are enabled. This can differ from the listen
-address and port when using Docker or a reverse proxy. The URL must not contain credentials,
-a query or a fragment.
+Assistant MQTT discovery and in every notification when the web interface is enabled. This can
+differ from the listen address and port when using Docker or a reverse proxy. The URL must not
+contain credentials, a query or a fragment.
 
 The URL is the directory the page is served from, so it ends with `/`; the scheduler adds
 the slash when it is missing (`https://example.com/backup` becomes
@@ -52,7 +52,8 @@ One card per job. Under the job's name:
   saved telemetry may show an unknown file count until its startup refresh succeeds; the
   Snapshots tab reads the repository independently.
 
-Then one row per operation that is enabled for it:
+Then one row per operation that is enabled for it, in the order `init`, `backup`, `forget`,
+`prune`, `check`:
 
 - **Operation** and **Description**: what the operation does, with a link to the Rustic
   documentation for the command it runs (`init` links to the `rustic init` chapter). The
@@ -69,6 +70,9 @@ Then one row per operation that is enabled for it:
 - **Output** while the operation runs, **Last output** otherwise: opens its run's output
   (see [Run output](#run-output)).
 
+Listing snapshots is not a row. Under the table, a 📂 icon (tooltip "Browse snapshots") opens
+the Snapshots tab with that job chosen.
+
 The page refreshes itself every three seconds (jobs, recent and next runs; not the snapshots).
 
 ### Starting an operation
@@ -82,9 +86,10 @@ for the repository, and a backup is followed by its after-backup sequence. The r
   job, and the page asks for confirmation before sending the request.
 - `init` creates the job's repository. It must be listed in `web.operations` **and** the job
   must set `allow_init: true`; otherwise the row is not offered, or the request is refused.
-  The page asks for confirmation first. Rustic refuses `init` when a repository already
-  exists at the location, and the run then fails with Rustic's message. `init` is never
-  scheduled and is never retried. A forget started here
+  The page asks for confirmation first. When a repository already exists at the location,
+  Rustic refuses `init`; the run then **succeeds** with the detail `repository already
+  initialized` and changes nothing. `init` is never scheduled and is never retried.
+  A forget started here
   goes through the same preview and safeguards as any other
   ([maintenance.md](maintenance.md)), including `forget.dry_run`.
 - `operations: []` makes the page read-only.
@@ -184,9 +189,10 @@ This is the scheduler's next occurrence per operation, not a calendar of all fut
 
 ## Using Rustic directly
 
-Ready-to-copy commands, per job, to look at the repository without the scheduler: list the
-job's snapshots, list the files of a snapshot, check the repository, see what a restore would
-do, restore. Two variants are shown:
+Ready-to-copy commands, for one job at a time, to look at the repository without the scheduler.
+The job is chosen in the Job list at the top of the tab, as on the Snapshots tab. The commands
+list the job's snapshots, list the files of a snapshot, check the repository, see what a
+restore would do, restore. Two variants are shown:
 
 - through `docker exec` with the scheduler's container, using all environment variables from
   your `rustic.env` and `jobs.<name>.env` configuration, which ensures the same profiles,

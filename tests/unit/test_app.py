@@ -7,6 +7,7 @@ import os
 import signal
 import socket
 
+import pytest
 from aiohttp import web
 
 from rustic_scheduler import SUPPORTED_RUSTIC_VERSION, __version__
@@ -26,8 +27,9 @@ async def wait_until(condition, seconds: float = 20) -> None:
         await asyncio.sleep(0.05)
 
 
+@pytest.mark.parametrize("with_web", [False, True])
 async def test_first_log_line_names_both_versions_and_startup_is_announced(
-    sandbox, short_tmp, capsys
+    sandbox, short_tmp, capsys, with_web
 ):
     received: list[dict] = []
 
@@ -42,9 +44,18 @@ async def test_first_log_line_names_both_versions_and_startup_is_announced(
     await web.TCPSite(runner, "127.0.0.1", 0).start()
     conf = short_tmp / "apprise.conf"
     conf.write_text(f"json://127.0.0.1:{runner.addresses[0][1]}/hook\n")
+    web_config = {"enabled": False}
+    if with_web:
+        web_config = {
+            "enabled": True,
+            "host": "127.0.0.1",
+            "port": free_port(),
+            "public_url": "https://backup.example:8443/",
+        }
     # No events selected: the start-up notification must not depend on them.
     sandbox.config(
         http={"host": "127.0.0.1", "port": free_port()},
+        web=web_config,
         notifications={"enabled": True, "config_files": [str(conf)], "retries": 0, "events": []},
     )
     path = short_tmp / "config.json"
@@ -68,8 +79,9 @@ async def test_first_log_line_names_both_versions_and_startup_is_announced(
         f" with Rustic {SUPPORTED_RUSTIC_VERSION}"
     )
     [notice] = received
-    assert notice["title"] == f"rustic-scheduler {__version__} started"
+    assert notice["title"] == f"🚀 rustic-scheduler {__version__} started"
+    link = "\n\nWeb UI: https://backup.example:8443/" if with_web else ""
     assert notice["message"] == (
-        f"Version: {__version__}\nRustic: {SUPPORTED_RUSTIC_VERSION}\nJobs: 1"
+        f"Version: {__version__}\nRustic: {SUPPORTED_RUSTIC_VERSION}\nJobs: 1{link}"
     )
     assert notice["type"] == "info"
