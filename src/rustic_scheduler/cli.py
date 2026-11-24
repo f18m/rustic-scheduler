@@ -74,11 +74,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
         print(f"warning: {warning}", file=sys.stderr)
     print(f"{args.config}: valid. Rustic {version}, {len(runtimes)} job(s).")
     for name, runtime in runtimes.items():
-        enabled = [
-            operation.value
-            for operation in Operation
-            if operation == Operation.BACKUP or getattr(runtime.job, operation.value).enabled
-        ]
+        enabled = [operation.value for operation in runtime.job.enabled_operations()]
         print(
             f"  {name}: label={runtime.label} lock={runtime.lock_key} "
             f"operations={','.join(enabled)}"

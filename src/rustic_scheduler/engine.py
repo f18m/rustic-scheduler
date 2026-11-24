@@ -50,6 +50,8 @@ TICK = 5.0
 #: A run that starts this late is still an on-time scheduled run.
 ON_TIME = timedelta(seconds=60)
 _FRACTION = re.compile(r"(\.\d{6})\d+")
+#: Rustic 0.11.4's line after a successful `init`, e.g. "repository 158f497f successfully created."
+_INIT_CREATED = re.compile(r"repository \S+ successfully created")
 _NO_RETRY = {Reason.TIMEOUT, Reason.SCOPE_VIOLATION, Reason.REMOVAL_LIMIT, Reason.SPAWN_ERROR}
 _AFTER_BACKUP_ORDER = (Operation.CHECK, Operation.FORGET, Operation.SNAPSHOTS)
 
@@ -278,19 +280,7 @@ class Engine:
     # ------------------------------------------------------------------ setup
 
     def enabled_operations(self, job: str) -> list[Operation]:
-        cfg = self.runtimes[job].job
-        operations = [Operation.BACKUP]
-        operations += [
-            operation
-            for operation in (
-                Operation.SNAPSHOTS,
-                Operation.FORGET,
-                Operation.PRUNE,
-                Operation.CHECK,
-            )
-            if getattr(cfg, operation.value).enabled
-        ]
-        return operations
+        return self.runtimes[job].job.enabled_operations()
 
     def _mqtt_progress_state(self) -> list[tuple[str, dict[str, Any]]]:
         assert self.mqtt is not None
@@ -534,6 +524,11 @@ class Engine:
             return False, "forget is not enabled for this job; it will not be run on request"
         if operation == Operation.PRUNE and not cfg.prune.enabled:
             return False, "prune is not enabled for this job; it will not be run on request"
+        if operation == Operation.INIT and not cfg.allow_init:
+            return (
+                False,
+                "init is not enabled for this job (allow_init); it will not be run on request",
+            )
         return self.submit(job, operation, trigger)
 
     # --------------------------------------------------------------- pipeline
@@ -619,7 +614,7 @@ class Engine:
     ) -> OperationResult:
         """Run an operation, with retries, and record its single final result."""
         key = (runtime.name, operation)
-        cfg = getattr(runtime.job, operation.value)
+        cfg = runtime.job.operation_config(operation)
         started = self.clock()
         log_file = self.state.run_log_path(runtime.name, operation, started)
         result = OperationResult(
@@ -745,6 +740,8 @@ class Engine:
                 return await self._plain(runtime, Operation.PRUNE, fd, log_file)
             case Operation.CHECK:
                 return await self._plain(runtime, Operation.CHECK, fd, log_file)
+            case Operation.INIT:
+                return await self._init(runtime, fd, log_file)
 
     def _on_message(
         self, runtime: JobRuntime, operation: Operation
@@ -932,7 +929,7 @@ class Engine:
         self, runtime: JobRuntime, operation: Operation, fd: int | None, log_file: Any
     ) -> Attempt:
         """Check and prune: the result is Rustic's exit status, minus interruptions."""
-        cfg = getattr(runtime.job, operation.value)
+        cfg = runtime.job.operation_config(operation)
         process = await self._process(
             runtime,
             commands.command_for(self.config, runtime, operation),
@@ -950,6 +947,30 @@ class Engine:
             exit_code=process.exit_code,
             dry_run=bool(getattr(cfg, "dry_run", False)),
         )
+
+    async def _init(self, runtime: JobRuntime, fd: int | None, log_file: Any) -> Attempt:
+        """Rustic prints no summary for init, so its exit status 0 is not enough: an
+        interrupted Rustic also exits 0. The success line is what Rustic prints when it
+        has written the repository."""
+        process = await self._process(
+            runtime,
+            commands.init_command(runtime),
+            runtime.job.operation_config(Operation.INIT).timeout,
+            fd,
+            log_file,
+            mode="ndjson",
+        )
+        problem = classify(process)
+        if problem is not None:
+            return problem
+        if not any(_INIT_CREATED.search(line) for line in process.stderr_tail):
+            return Attempt(
+                Outcome.UNKNOWN,
+                Reason.NO_SUMMARY,
+                process.exit_code,
+                "Rustic exited with status 0 but did not confirm that the repository was created",
+            )
+        return Attempt(Outcome.SUCCEEDED, exit_code=process.exit_code, detail="repository created")
 
     # ---------------------------------------------------------------- results
 

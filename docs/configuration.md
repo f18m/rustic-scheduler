@@ -119,7 +119,7 @@ topics and file names.
 | `misfire_grace` | from `scheduler` | |
 | `repository_wait_timeout` | `6h` | How long a run may wait for the repository. |
 | `repository_lock` | automatic | Name of the lock to use instead of the repository identity Rustic reports. Give two jobs the same name to force them to run one at a time. |
-| `allow_init` | `false` | Accept `init = true` in the profiles (Rustic may create the repository). |
+| `allow_init` | `false` | Accept `init = true` in the profiles (Rustic may create the repository). Also lets an `init` run be requested, from the web interface (when `web.operations` lists `init`) or with `rustic-scheduler trigger JOB init`. `init` is never scheduled. |
 | `env` | `{}` | Extra environment for this job's Rustic processes. Not for secrets. |
 
 Label and host together must be unique among jobs. Two jobs may share a label only when

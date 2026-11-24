@@ -21,8 +21,10 @@ just build-multiarch  # the same for linux/amd64 and linux/arm64
   builds, but they are not wired into the Dockerfile.
 - CI publishes `ghcr.io/<owner>/rustic-scheduler` on pushes to `main`, tagged `main`,
   `latest`, and `sha-<commit>`, and on published GitHub releases using the exact release Git
-  tag (for example, release `0.4.0` publishes `:0.4.0`). Pull requests build and test the
-  image without publishing it.
+  tag (for example, release `0.4.0` publishes `:0.4.0`). A pull request from a branch of this
+  repository also publishes its image, tagged `pr-<number>` and `sha-<commit>`, so it can be
+  tested in Docker; pushes to the pull request update both tags. Pull requests from forks and
+  Dependabot pull requests build the image without publishing it.
 - Reproducibility: base and uv images pinned by digest; Rustic 0.11.4 pinned by SHA-256;
   Python dependencies installed from `uv.lock` with `--frozen`. The same sources give the
   same dependency set. Image bytes are not bit-for-bit identical between builds (Debian
@@ -151,5 +153,5 @@ just e2e           # build the image; test it with Pushgateway and Prometheus
 
 `.github/workflows/ci.yml` runs lint, the full test suite on Python 3.12 and 3.13 with the
 real Rustic binary and the service containers, the image end-to-end test, and a build for
-both architectures. Pushes to `main` and published GitHub releases publish that
-multi-architecture image to GHCR.
+both architectures. Pushes to `main`, pull requests from this repository and published GitHub
+releases publish that multi-architecture image to GHCR.

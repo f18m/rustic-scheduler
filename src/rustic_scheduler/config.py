@@ -26,6 +26,7 @@ from pydantic import (
 )
 
 from .durations import parse_duration
+from .model import Operation
 from .schedule import DAY_NAMES, Schedule, parse_day, parse_time
 
 Duration = Annotated[timedelta, BeforeValidator(parse_duration)]
@@ -264,6 +265,8 @@ class JobConfig(_Model):
     repository_wait_timeout: Duration = timedelta(hours=6)
     #: Override the automatically derived repository identity used for locking.
     repository_lock: str | None = None
+    #: Lets Rustic create the repository: `backup --init` in the profiles, and an `init`
+    #: run requested by the scheduler, the web interface or the command line.
     allow_init: bool = False
     env: dict[str, str] = Field(default_factory=dict)
     backup: BackupConfig = BackupConfig()
@@ -297,6 +300,23 @@ class JobConfig(_Model):
             raise ValueError("repository_lock may only contain letters, digits, '_', '.' and '-'")
         return self
 
+    def enabled_operations(self) -> list[Operation]:
+        """What the job may run, in ``Operation`` order. Init only with ``allow_init``."""
+        enabled = {Operation.BACKUP}
+        if self.allow_init:
+            enabled.add(Operation.INIT)
+        for operation in (Operation.SNAPSHOTS, Operation.FORGET, Operation.PRUNE, Operation.CHECK):
+            if getattr(self, operation.value).enabled:
+                enabled.add(operation)
+        return [operation for operation in Operation if operation in enabled]
+
+    def operation_config(self, operation: Operation) -> _OperationConfig:
+        """Timeout and retry settings of an operation. Init has none in the YAML."""
+        if operation == Operation.INIT:
+            return _OperationConfig(timeout=INIT_TIMEOUT, retries=0)
+        config: _OperationConfig = getattr(self, operation.value)
+        return config
+
 
 class SchedulerConfig(_Model):
     #: Default timezone for schedules that do not name one.
@@ -328,6 +348,10 @@ class RusticConfig(_Model):
 
 
 CommandOperation = Literal["backup", "snapshots", "check", "forget", "prune"]
+#: The web page may also create a job's repository, when the job sets `allow_init`.
+WebOperation = Literal["backup", "snapshots", "check", "forget", "prune", "init"]
+#: `rustic init` writes a few objects and stops; it is never retried.
+INIT_TIMEOUT = timedelta(minutes=30)
 
 
 class HttpConfig(_Model):
@@ -388,8 +412,9 @@ class WebConfig(_Model):
     #: ends with `/`: it is the directory the page's relative paths resolve against.
     public_url: AnyHttpUrl | None = None
     #: Operations the page may start. `forget` and `prune` delete data, so
-    #: they have to be listed explicitly. Empty: the page is read-only.
-    operations: list[CommandOperation] = ["backup", "check"]
+    #: they have to be listed explicitly. `init` also needs `allow_init` on the job.
+    #: Empty: the page is read-only.
+    operations: list[WebOperation] = ["backup", "check"]
     #: HTTP Basic authentication configuration.
     auth: WebAuthConfig = WebAuthConfig()
     #: Finished and skipped runs kept in memory for the history table.
@@ -604,7 +629,9 @@ def _semantic_problems(config: Config) -> list[str]:
                 problems.append(f"{where}.{key}: {exc}")
         # An enabled operation that nothing would ever start is a mistake, unless
         # it is meant to be started by MQTT message or from the web interface.
-        on_demand = set(config.mqtt.commands.operations) if config.mqtt.commands.enabled else set()
+        on_demand: set[str] = (
+            set(config.mqtt.commands.operations) if config.mqtt.commands.enabled else set()
+        )
         if config.web.enabled:
             on_demand |= set(config.web.operations)
         unstartable = [

@@ -98,6 +98,42 @@ assert.equal(body.children.length, 1);
 assert.equal(body.children[0].children[0].colSpan, 4);
 assert.equal(body.children[0].children[0].textContent, "No operations are scheduled.");
 
+// The jobs table: a Description column after Operation, and a confirmation before init.
+function find(node, tag) {
+  if (node.tag === tag) return node;
+  for (const child of node.children) {
+    const hit = child && typeof child === "object" ? find(child, tag) : null;
+    if (hit) return hit;
+  }
+  return null;
+}
+context.data = {
+  now: "2026-06-03T10:00:00Z", shutting_down: false,
+  jobs: [{ name: "docs", label: "docs", snapshots: null, repository_busy: false, operations: [
+    { operation: "backup", state: "idle", can_run: true, last_result: null, next_run: null, progress: null },
+    { operation: "init", state: "idle", can_run: true, last_result: null, next_run: null, progress: null },
+  ] }],
+};
+vm.runInContext("renderJobs(data)", context);
+const rows = find(getElementById("jobs"), "tbody").children;
+assert.equal(rows.length, 2);
+assert.equal(rows[1].children[0].textContent, "init");
+const description = rows[1].children[1];
+assert.equal(description.children[0], "Creates a new, empty repository at the job's location. Rustic refuses if one is already there.");
+assert.equal(description.children[2].href, "https://rustic.cli.rs/docs/commands/init/intro.html");
+assert.equal(description.children[2].textContent, "Rustic docs");
+assert.equal(rows[0].children[1].children[2].href, "https://rustic.cli.rs/docs/commands/backup/creating_snapshots.html");
+const asked = [];
+let fetched = false;
+context.window.confirm = (text) => { asked.push(text); return false; };
+context.fetch = async () => { fetched = true; return {}; };
+vm.runInContext('run("docs", { operation: "init" }, { disabled: false })', context).then(() => {
+  assert.equal(asked.length, 1);
+  assert.match(asked[0], /^Run init for job "docs" now\?/);
+  assert.match(asked[0], /init creates a new repository/);
+  assert.equal(fetched, false, "a cancelled init is not requested");
+});
+
 context.data = {
   version: "test", rustic_version: "test", ready: true, shutting_down: false,
   jobs: [{ name: "new", operations: [

@@ -5,6 +5,7 @@ from rustic_scheduler.commands import (
     check_command,
     command_for,
     forget_command,
+    init_command,
     make_runtime,
     prune_command,
     snapshots_command,
@@ -223,3 +224,16 @@ def test_lock_key_ignores_options_that_do_not_locate_the_repository():
 def test_explicit_lock_name_wins(build):
     _, runtime, _ = build({"repository_lock": "shared-nas"})
     assert runtime.lock_key == "shared-nas"
+
+
+def test_init_command_has_profiles_and_nothing_else(build, tmp_path):
+    config, runtime, tmp = build({"allow_init": True})
+    assert init_command(runtime) == [
+        "rustic",
+        "-P",
+        f"{tmp}/repo.toml",
+        "-P",
+        f"{tmp}/opts.toml",
+        "init",
+    ]
+    assert command_for(config, runtime, Operation.INIT) == init_command(runtime)

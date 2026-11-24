@@ -7,6 +7,39 @@ let failures = 0;
 let noticeTimer = null;
 // Whether run output can be shown (web.run_logs), from the latest overview.
 let runLogs = { available: false, message: null };
+// What each operation does, with the official Rustic documentation for the command it runs.
+const OPERATIONS = {
+  backup: {
+    text: "Saves the job's sources as a new snapshot.",
+    docs: "https://rustic.cli.rs/docs/commands/backup/creating_snapshots.html",
+  },
+  snapshots: {
+    text: "Lists the job's snapshots for the telemetry. Changes nothing.",
+    docs: "https://rustic.cli.rs/docs/commands/misc/listing.html",
+  },
+  forget: {
+    text: "Applies the job's retention rules to its own snapshots and removes the ones they do not keep. The scheduler previews the removal first.",
+    docs: "https://rustic.cli.rs/docs/commands/forget/intro.html",
+  },
+  prune: {
+    text: "Deletes repository data that no snapshot uses any more, and repacks partly used data.",
+    docs: "https://rustic.cli.rs/docs/commands/forget/customize_pruning.html",
+  },
+  check: {
+    text: "Verifies the repository's structure; with read-data it also reads the stored data.",
+    docs: "https://rustic.cli.rs/docs/commands/misc/check.html",
+  },
+  init: {
+    text: "Creates a new, empty repository at the job's location. Rustic refuses if one is already there.",
+    docs: "https://rustic.cli.rs/docs/commands/init/intro.html",
+  },
+};
+// Operations that ask before they start, and what the question says they do.
+const CONFIRM = {
+  forget: "removes backup data according to the job's configuration.",
+  prune: "removes backup data according to the job's configuration.",
+  init: "creates a new repository where the job's configuration points. Check that the location is the right one.",
+};
 
 function el(tag, props, ...children) {
   const node = document.createElement(tag);
@@ -114,10 +147,10 @@ function lastResult(row) {
 }
 
 async function run(job, row, button) {
-  if (row.destructive) {
+  if (CONFIRM[row.operation]) {
     const sure = window.confirm(
       `Run ${row.operation} for job "${job}" now?\n\n` +
-      `${row.operation} removes backup data according to the job's configuration.`
+      `${row.operation} ${CONFIRM[row.operation]}`
     );
     if (!sure) return;
   }
@@ -164,6 +197,7 @@ function renderJobs(data) {
       }
       body.append(el("tr", null,
         el("td", { class: "name", text: row.operation }),
+        describe(row.operation),
         el("td", null, badge(row.state)),
         el("td", null, activity(row, now)),
         lastResult(row),
@@ -179,12 +213,19 @@ function renderJobs(data) {
       el("p", { class: "small snapshot", text: latestSnapshot(job) }),
       el("div", { class: "scroll" }, el("table", null,
         el("thead", null, el("tr", null,
-          el("th", { text: "Operation" }), el("th", { text: "State" }), el("th", { text: "Progress / next run" }),
+          el("th", { text: "Operation" }), el("th", { text: "Description" }),
+          el("th", { text: "State" }), el("th", { text: "Progress / next run" }),
           el("th", { text: "Last result" }), el("th", { text: "" }))),
         body))
     );
   });
   $("jobs").replaceChildren(...cards);
+}
+
+function describe(operation) {
+  const info = OPERATIONS[operation];
+  return el("td", { class: "small" }, info.text, " ",
+    el("a", { href: info.docs, target: "_blank", rel: "noopener noreferrer", text: "Rustic docs" }));
 }
 
 function outputCell(item) {

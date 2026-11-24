@@ -54,6 +54,9 @@ One card per job. Under the job's name:
 
 Then one row per operation that is enabled for it:
 
+- **Operation** and **Description**: what the operation does, with a link to the Rustic
+  documentation for the command it runs (`init` links to the `rustic init` chapter). The
+  links open Rustic's online book; the page loads nothing from it.
 - **State**: `idle`, `queued` (waiting for the repository) or `running`.
 - **Progress**, while running: percentage, bytes and Rustic's estimate of the time left, as
   far as Rustic reports them, and how long the run has been going. Backups report progress;
@@ -76,7 +79,12 @@ for the repository, and a backup is followed by its after-backup sequence. The r
 
 - Only operations in `web.operations` can be started. The default is `[backup, check]`.
   `forget` and `prune` delete data: they must be listed explicitly **and** be enabled on the
-  job, and the page asks for confirmation before sending the request. A forget started here
+  job, and the page asks for confirmation before sending the request.
+- `init` creates the job's repository. It must be listed in `web.operations` **and** the job
+  must set `allow_init: true`; otherwise the row is not offered, or the request is refused.
+  The page asks for confirmation first. Rustic refuses `init` when a repository already
+  exists at the location, and the run then fails with Rustic's message. `init` is never
+  scheduled and is never retried. A forget started here
   goes through the same preview and safeguards as any other
   ([maintenance.md](maintenance.md)), including `forget.dry_run`.
 - `operations: []` makes the page read-only.
@@ -203,7 +211,7 @@ metrics port (9300 stays read-only) and off by default.
 
 | Protection | What it does |
 |---|---|
-| `web.operations` | Limits what can be started. Keep `forget` and `prune` out unless everyone who can open the page may delete backup data within the job's retention rules. |
+| `web.operations` | Limits what can be started. Keep `forget` and `prune` out unless everyone who can open the page may delete backup data within the job's retention rules. `init` also needs `allow_init` on the job. |
 | `web.auth.enabled` | Enable HTTP Basic authentication on every route, the page included. When enabled, `web.auth.password_file` must be set. When disabled, no authentication is required. |
 | `web.auth.password_file` | The file holds the password for HTTP Basic authentication (with `web.auth.username`, default `admin`). It is read at each request, so replacing the file rotates it. If the file cannot be read, or holds no password (empty or only whitespace), every request fails with 503: an unreadable or empty password never means "no password". Only used when `web.auth.enabled` is true. |
 | `web.browse.enabled` | Off by default. When on, everyone who can open the page can read the names, sizes, times and owners of the files in every job's snapshots; not their contents. |

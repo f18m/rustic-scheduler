@@ -127,6 +127,11 @@ def check_command(config: Config, runtime: JobRuntime) -> list[str]:
     return args + check.extra_args
 
 
+def init_command(runtime: JobRuntime) -> list[str]:
+    """`rustic init`: creates the repository. The caller checks that the job sets ``allow_init``."""
+    return [runtime.binary, *runtime.base_args, "init"]
+
+
 def command_for(config: Config, runtime: JobRuntime, operation: Operation) -> list[str]:
     match operation:
         case Operation.BACKUP:
@@ -139,6 +144,8 @@ def command_for(config: Config, runtime: JobRuntime, operation: Operation) -> li
             return prune_command(runtime)
         case Operation.CHECK:
             return check_command(config, runtime)
+        case Operation.INIT:
+            return init_command(runtime)
 
 
 def make_runtime(config: Config, name: str, binary: str, merged: MergedProfile) -> JobRuntime:

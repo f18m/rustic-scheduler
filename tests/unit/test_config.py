@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from rustic_scheduler.config import ConfigError, load_config, parse_config
+from rustic_scheduler.model import Operation
 
 
 @pytest.fixture
@@ -199,3 +200,24 @@ def test_example_config_is_valid(monkeypatch):
     raw.get("notifications", {})["enabled"] = False
     config = parse_config(raw)
     assert config.jobs
+
+
+def test_init_is_offered_on_the_web_page_only_and_needs_allow_init(base):
+    job = parse_config(base()).jobs["docs"]
+    assert job.enabled_operations() == [Operation.BACKUP]
+    assert parse_config(base({"allow_init": True})).jobs["docs"].enabled_operations() == [
+        Operation.BACKUP,
+        Operation.INIT,
+    ]
+    assert parse_config(base(web={"enabled": True, "operations": ["init"]}))
+    # Starting init by MQTT message is not offered, so it is not an accepted value there.
+    assert "mqtt" in problems(
+        base(mqtt={"enabled": True, "commands": {"enabled": True, "operations": ["init"]}})
+    )
+
+
+def test_init_has_a_fixed_timeout_and_is_never_retried(base):
+    job = parse_config(base({"allow_init": True})).jobs["docs"]
+    settings = job.operation_config(Operation.INIT)
+    assert settings.retries == 0 and settings.timeout.total_seconds() > 0
+    assert job.operation_config(Operation.BACKUP) is job.backup
