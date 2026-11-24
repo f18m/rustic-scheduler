@@ -1,11 +1,10 @@
-# rustic-scheduler with the Prometheus Pushgateway as a sidecar.
+# rustic-scheduler Compose Example
+# (with the Prometheus Pushgateway as a sidecar)
 #
 #   docker compose up -d                                   scheduler + Pushgateway
 #   docker compose --profile monitoring up -d              ... plus an example Prometheus
 #   docker compose --profile mqtt up -d                    ... plus an example MQTT broker
 #
-# Prometheus must scrape TWO endpoints: rustic-scheduler:9300 and pushgateway:9091
-# (see examples/prometheus/prometheus.yml).
 
 name: rustic-scheduler
 
@@ -41,9 +40,8 @@ services:
       - state:/var/lib/rustic-scheduler
       - cache:/var/cache/rustic
       # Data to back up: always read-only.
-      - ${DOCUMENTS_DIR:-./examples/data/documents}:/data/documents:ro
-      - ${PHOTOS_DIR:-./examples/data/photos}:/data/photos:ro
-      - ${VIDEOS_DIR:-./examples/data/videos}:/data/videos:ro
+      # For the quickstart, change the left side to your actual data folder.
+      - ${DATA_DIR:-.}/examples/data/src:/data/src:ro
     secrets:
       - rustic_password
       - aws_credentials

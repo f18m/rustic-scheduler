@@ -50,25 +50,24 @@ Assumes you've read the [Rustic Getting Started](https://rustic.cli.rs/docs/gett
 **Requirements:** Docker with Compose. Supported platforms: `linux/amd64`, `linux/arm64`.
 
 ```sh
-git clone https://github.com/f18m/rustic-scheduler && cd rustic-scheduler
+git clone https://github.com/f18m/rustic-scheduler && cd rustic-scheduler/examples
 
 # 1. Create a Rustic profile matching your repository (like Getting Started)
-mkdir -p examples/profiles
-cat > examples/profiles/myrepo.toml << 'EOF'
+cat > profiles/myrepo.toml << 'EOF'
 [repository]
 repository = "/tmp/repo"              # or S3 path like "s3:bucket/path"
 password = "my-backup-password"
 EOF
 
 # 2. Create a minimal configuration
-cat > examples/config.yaml << 'EOF'
+cat > config.yaml << 'EOF'
 scheduler:
   timezone: Europe/Rome
 
 jobs:
-  backup-and-forget:
+  mydata:
     profiles: [myrepo]
-    sources: [/data/src]              # your data folder
+    sources: [/data/src]              # your data folder (see compose.yaml)
     schedule:
       days: daily
       times: ["02:30"]
@@ -80,19 +79,18 @@ jobs:
         keep-weekly: 8
 EOF
 
-# 3. Mount your data in compose.yaml
-# Edit volumes section: change /data/src to your actual folder
+# 3. Create the repository (one time)
+docker compose -f compose.yaml run --rm --entrypoint rustic rustic-scheduler -P /etc/rustic-scheduler/profiles/myrepo.toml init
 
-# 4. Create the repository (one time)
-docker compose run --rm --entrypoint rustic rustic-scheduler init
+# 4. Start the scheduler
+docker compose -f compose.yaml up -d
+docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler status
 
-# 5. Start the scheduler
-docker compose up -d
-docker compose exec rustic-scheduler rustic-scheduler status
-
-# 6. Run a backup now (optional)
-docker compose exec rustic-scheduler rustic-scheduler trigger backup-and-forget --wait
+# 5. Run a backup now (optional)
+docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler trigger mydata --wait
 ```
+
+**To use your own data:** Edit `compose.yaml` and change the `DATA_DIR` environment variable (or the left side of the mount path) to point to your actual folder. The right side must stay `/data/src` to match the configuration.
 
 ## 📋 Minimal configuration example
 
@@ -101,7 +99,7 @@ scheduler:
   timezone: Europe/Rome              # timezone for all schedules
 
 jobs:
-  backup-and-forget:
+  mydata:
     profiles: [myrepo]               # your Rustic TOML profile
     sources: [/data/src]             # folder to backup
     schedule:
@@ -122,15 +120,17 @@ Your backups are running on schedule. Here's what you can do:
 
 **Check status:**
 ```sh
-docker compose exec rustic-scheduler rustic-scheduler status
-docker compose logs -f rustic-scheduler
+cd examples
+docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler status
+docker compose -f compose.yaml logs -f rustic-scheduler
 ```
 
 **View Rustic snapshots and operations:**
 ```sh
-docker compose exec rustic-scheduler rustic-scheduler rustic backup-and-forget -- snapshots
-docker compose exec rustic-scheduler rustic-scheduler rustic backup-and-forget -- ls latest
-docker compose exec rustic-scheduler rustic-scheduler forget-preview backup-and-forget
+cd examples
+docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler rustic mydata -- snapshots
+docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler rustic mydata -- ls latest
+docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler forget-preview mydata
 ```
 
 **Advanced setup** (optional features):
@@ -155,14 +155,16 @@ Nothing destructive runs unless you explicitly enable it in the configuration YA
 You can use Rustic directly from anywhere with your own profiles and credentials. For convenience, the scheduler provides helpers that load your job's profiles and environment:
 
 ```sh
+cd examples
+
 # List snapshots
-docker compose exec rustic-scheduler rustic-scheduler rustic backup-and-forget -- snapshots
+docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler rustic mydata -- snapshots
 
 # Browse latest snapshot
-docker compose exec rustic-scheduler rustic-scheduler rustic backup-and-forget -- ls latest
+docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler rustic mydata -- ls latest
 
 # See what forget would remove (no changes)
-docker compose exec rustic-scheduler rustic-scheduler forget-preview backup-and-forget
+docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler forget-preview mydata
 ```
 
 Your repository is a standard Rustic repository; nothing about it is scheduler-specific.
@@ -180,8 +182,9 @@ rustic-scheduler [-c CONFIG] COMMAND
 See all available commands and operations:
 
 ```sh
-docker compose exec rustic-scheduler rustic-scheduler --help
-docker compose exec rustic-scheduler rustic-scheduler trigger --help
+cd examples
+docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler --help
+docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler trigger --help
 ```
 
 ## 📝 Documentation
