@@ -52,10 +52,10 @@ Assumes you've read the [Rustic Getting Started](https://rustic.cli.rs/docs/gett
 ```sh
 git clone https://github.com/f18m/rustic-scheduler && cd rustic-scheduler/examples
 
-# 1. Create a Rustic profile matching your repository (like Getting Started)
+# 1. Create a very basic Rustic profile (like in Rustic Getting Started)
 cat > profiles/myrepo.toml << 'EOF'
 [repository]
-repository = "/tmp/repo"              # or S3 path like "s3:bucket/path"
+repository = "/var/lib/rustic-scheduler/repo"
 password-file = "/run/secrets/rustic_password"
 EOF
 
@@ -75,7 +75,7 @@ web:
 jobs:
   mydata:
     profiles: [myrepo]
-    sources: [/data/src]              # your data folder (see compose.yaml)
+    sources: [/data/src]    # your data folder (see compose.yaml)
     schedule:
       days: daily
       times: ["02:30"]
