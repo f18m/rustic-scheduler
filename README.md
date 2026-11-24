@@ -56,13 +56,20 @@ git clone https://github.com/f18m/rustic-scheduler && cd rustic-scheduler/exampl
 cat > profiles/myrepo.toml << 'EOF'
 [repository]
 repository = "/tmp/repo"              # or S3 path like "s3:bucket/path"
-password_file = "/run/secrets/rustic_password"
+password-file = "/run/secrets/rustic_password"
 EOF
+
+# Note: The password-file is loaded from Docker Compose secrets (secrets/rustic_password.example)
 
 # 2. Create a minimal configuration for rustic-scheduler
 cat > config.yaml << 'EOF'
 scheduler:
   timezone: Europe/Rome
+
+web:
+  enabled: true
+  port: 9301
+  operations: [backup, check]
 
 jobs:
   mydata:
@@ -79,7 +86,7 @@ jobs:
         keep-weekly: 8
 EOF
 
-# 3. Create the repository (one time)
+# 3. Create the repository (one time only)
 docker compose run --rm --entrypoint rustic sched -P /etc/rustic-scheduler/profiles/myrepo.toml init
 
 # 4. Start the scheduler
@@ -89,6 +96,8 @@ docker compose exec sched rustic-scheduler status
 # 5. Run a backup now (optional)
 docker compose exec sched rustic-scheduler trigger mydata --wait
 ```
+
+**Open the web interface:** Once the scheduler is running, open `http://localhost:9301` in your browser to see backups, run operations, and browse snapshots.
 
 **To use your own data:** Edit `docker-compose.yaml` and change the `DATA_DIR` environment variable (or the left side of the mount path) to point to your actual folder. The right side must stay `/data/src` to match the configuration.
 
@@ -183,8 +192,8 @@ See all available commands and operations:
 
 ```sh
 cd examples
-docker compose exec sched rustic-scheduler --help
-docker compose exec sched rustic-scheduler trigger --help
+docker compose exec rustic-scheduler rustic-scheduler --help
+docker compose exec rustic-scheduler rustic-scheduler trigger --help
 ```
 
 ## 📝 Documentation
