@@ -1,0 +1,23 @@
+# Prometheus scrape configuration for a rustic-scheduler deployment.
+# There are TWO endpoints: the scheduler's own metrics, and the Pushgateway
+# that holds the metrics Rustic pushes after each backup.
+
+global:
+  scrape_interval: 30s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  # Scheduler state, live progress, operation results, snapshot telemetry.
+  - job_name: rustic-scheduler
+    static_configs:
+      - targets: ["rustic-scheduler:9300"]
+
+  # Rustic's own rustic_backup_* metrics.
+  # honor_labels keeps the `job` label Rustic pushed (default: rustic_backup)
+  # instead of overwriting it with this scrape job's name.
+  - job_name: pushgateway
+    honor_labels: true
+    static_configs:
+      - targets: ["pushgateway:9091"]
