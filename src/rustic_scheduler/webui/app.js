@@ -296,40 +296,55 @@ function block(title, text) {
     el("pre", { text }));
 }
 
-let manualKey = "";
+// The job shown in "Using Rustic directly" is chosen in a list, as on the Snapshots tab.
+const manual = { job: null, jobs: "", key: "", data: null };
 function renderManual(data) {
-  // Rebuilt only when it changes, so that open sections and selections survive the refresh.
-  const key = JSON.stringify(data.jobs.map((job) => [job.name, job.manual])) + data.rustic_version;
-  if (key === manualKey) return;
-  manualKey = key;
-  const sections = data.jobs.map((job, index) => {
-    const m = job.manual;
-    const plain = `rustic ${m.profiles}`;
-    const dockerExec = [
-      "docker exec -ti <rustic-scheduler-container> bash",
-      m.docker_exec + " snapshots " + m.scope,
-      "# or instead of 'snapshots' use: ls SNAPSHOT_ID",
-      "# or: check",
-      "# or: restore --dry-run SNAPSHOT_ID /restore/target",
-      "# or: restore SNAPSHOT_ID:/path/in/snapshot /restore/target",
-    ].join("\n");
-    const direct = [
-      ...m.env.map((line) => `export ${line}`),
-      `${plain} snapshots ${m.scope}`,
-      `${plain} ls SNAPSHOT_ID`,
-      `${plain} check`,
-      `${plain} restore --dry-run SNAPSHOT_ID /restore/target`,
-      `${plain} restore SNAPSHOT_ID:/path/in/snapshot /restore/target`,
-    ].join("\n");
-    return el("details", { open: index === 0 },
-      el("summary", { text: job.name }),
-      el("p", { class: "small", text:
-        `Snapshots of this job carry the label "${m.label}"` + (m.host ? ` and the host "${m.host}".` : ".") }),
-      block("In the scheduler's container (with environment variables from your config; replace <rustic-scheduler-container> with the container name or ID)", dockerExec),
-      block(`With plain Rustic ${data.rustic_version}, in the container or on any machine that has these profile files and the secrets they refer to (adjust the paths)`, direct));
-  });
-  $("manual").replaceChildren(el("div", { class: "card" }, ...sections));
+  manual.data = data;
+  const names = data.jobs.map((job) => job.name);
+  if (JSON.stringify(names) !== manual.jobs) {
+    manual.jobs = JSON.stringify(names);
+    $("manual-job").replaceChildren(...names.map((name) => el("option", { value: name, text: name })));
+    if (!names.includes(manual.job)) manual.job = names[0] || null;
+    $("manual-job").value = manual.job;
+  }
+  // Rebuilt only when it changes, so that the text and the selection survive the refresh.
+  const job = data.jobs.find((item) => item.name === manual.job);
+  const key = JSON.stringify([manual.job, job && job.manual, data.rustic_version]);
+  if (key === manual.key) return;
+  manual.key = key;
+  if (!job) {
+    $("manual").replaceChildren(el("p", { class: "muted", text: "No job is configured." }));
+    return;
+  }
+  const m = job.manual;
+  const plain = `rustic ${m.profiles}`;
+  const dockerExec = [
+    "docker exec -ti <rustic-scheduler-container> bash",
+    m.docker_exec + " snapshots " + m.scope,
+    "# or instead of 'snapshots' use: ls SNAPSHOT_ID",
+    "# or: check",
+    "# or: restore --dry-run SNAPSHOT_ID /restore/target",
+    "# or: restore SNAPSHOT_ID:/path/in/snapshot /restore/target",
+  ].join("\n");
+  const direct = [
+    ...m.env.map((line) => `export ${line}`),
+    `${plain} snapshots ${m.scope}`,
+    `${plain} ls SNAPSHOT_ID`,
+    `${plain} check`,
+    `${plain} restore --dry-run SNAPSHOT_ID /restore/target`,
+    `${plain} restore SNAPSHOT_ID:/path/in/snapshot /restore/target`,
+  ].join("\n");
+  $("manual").replaceChildren(
+    el("p", { class: "small", text:
+      `Snapshots of this job carry the label "${m.label}"` + (m.host ? ` and the host "${m.host}".` : ".") }),
+    block("In the scheduler's container (with environment variables from your config; replace <rustic-scheduler-container> with the container name or ID)", dockerExec),
+    block(`With plain Rustic ${data.rustic_version}, in the container or on any machine that has these profile files and the secrets they refer to (adjust the paths)`, direct));
 }
+$("manual-job").addEventListener("change", () => {
+  manual.job = $("manual-job").value;
+  manual.key = "";
+  renderManual(manual.data);
+});
 
 // ------------------------------------------------------------------ tabs
 

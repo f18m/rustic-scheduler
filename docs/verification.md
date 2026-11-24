@@ -177,6 +177,9 @@ detected.
 - With Node.js and a simulated DOM (unit test, skipped when Node.js is unavailable): the
   Next runs tab, chronological ordering across timezones, exclusion of unscheduled
   operations, refresh, empty state and keyboard navigation. This is not a browser test.
+- With Node.js and a simulated DOM: the Using Rustic directly tab shows only the job chosen in
+  its Job list, keeps the choice and the text across refreshes, and falls back to the first
+  job when the chosen one is removed; no job configured. This is not a browser test.
 - With Node.js and a simulated DOM: snapshot timestamps are plain text and each Browse
   button selects its snapshot and requests its initial directory; the empty list spans all
   columns. This is not a browser test.

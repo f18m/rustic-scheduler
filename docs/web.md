@@ -189,9 +189,10 @@ This is the scheduler's next occurrence per operation, not a calendar of all fut
 
 ## Using Rustic directly
 
-Ready-to-copy commands, per job, to look at the repository without the scheduler: list the
-job's snapshots, list the files of a snapshot, check the repository, see what a restore would
-do, restore. Two variants are shown:
+Ready-to-copy commands, for one job at a time, to look at the repository without the scheduler.
+The job is chosen in the Job list at the top of the tab, as on the Snapshots tab. The commands
+list the job's snapshots, list the files of a snapshot, check the repository, see what a
+restore would do, restore. Two variants are shown:
 
 - through `docker exec` with the scheduler's container, using all environment variables from
   your `rustic.env` and `jobs.<name>.env` configuration, which ensures the same profiles,
