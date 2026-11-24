@@ -186,6 +186,7 @@ function renderJobs(data) {
     for (const row of job.operations.filter((operation) => operation.operation !== "snapshots")) {
       const action = el("td", { class: "nowrap" });
       if (row.can_run) {
+        // Destructive operations (forget, prune) are red, so that they are not taken for a backup.
         const button = el("button", { type: "button", text: "Run now", class: row.destructive ? "danger" : "" });
         button.disabled = row.state !== "idle" || data.shutting_down;
         button.addEventListener("click", () => run(job.name, row, button));
@@ -211,14 +212,12 @@ function renderJobs(data) {
     const facts = [`label ${job.label}`];
     if (job.host) facts.push(`host ${job.host}`);
     if (job.repository_busy) facts.push("repository in use");
-    const browseLink = el("a", { href: "#snapshots", class: "icon-link", text: "📂", title: "Browse snapshots" });
-    browseLink.setAttribute("aria-label", `Browse snapshots of ${job.name}`);
-    browseLink.addEventListener("click", (event) => {
-      event.preventDefault();
-      browseSnapshotsOf(job.name);
-    });
+    const browseButton = el("button", { type: "button", text: "Browse snapshots" });
+    browseButton.setAttribute("aria-label", `Browse snapshots of ${job.name}`);
+    browseButton.addEventListener("click", () => browseSnapshotsOf(job.name));
     return el("div", { class: "card" },
-      el("div", { class: "card-head" }, el("h3", { text: job.name }), el("span", { class: "small", text: facts.join(" · ") })),
+      el("div", { class: "card-head" },
+        el("h3", { text: job.name }), el("span", { class: "small", text: facts.join(" · ") }), browseButton),
       job.description ? el("p", { class: "description", text: job.description }) : null,
       el("p", { class: "small snapshot", text: latestSnapshot(job) }),
       el("div", { class: "scroll" }, el("table", null,
@@ -226,8 +225,7 @@ function renderJobs(data) {
           el("th", { text: "Operation" }), el("th", { text: "Description" }),
           el("th", { text: "State" }), el("th", { text: "Progress / next run" }),
           el("th", { text: "Last result" }), el("th", { text: "" }))),
-        body)),
-      el("p", { class: "card-links" }, browseLink)
+        body))
     );
   });
   $("jobs").replaceChildren(...cards);
