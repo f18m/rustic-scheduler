@@ -65,6 +65,7 @@ EOF
 cat > config.yaml << 'EOF'
 scheduler:
   timezone: Europe/Rome
+  log_level: INFO
 
 web:
   enabled: true
