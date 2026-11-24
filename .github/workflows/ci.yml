@@ -102,6 +102,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and publish for both supported architectures
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -112,3 +113,45 @@ jobs:
           push: ${{ steps.publish.outputs.publish == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+      - name: Describe the image in the job summary
+        env:
+          PUBLISHED: ${{ steps.publish.outputs.publish }}
+          IMAGE: ghcr.io/${{ github.repository }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+          LABELS: ${{ steps.meta.outputs.labels }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          VERSION: ${{ steps.version.outputs.version }}
+          COMMIT: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          {
+            echo "## Docker image"
+            echo
+            echo "- Version: \`${VERSION}\`"
+            echo "- Commit: \`${COMMIT}\`"
+            echo "- Event: \`${EVENT}\`"
+            echo "- Platforms: \`linux/amd64\`, \`linux/arm64\`"
+            if [ "${PUBLISHED}" = "true" ]; then
+              echo "- Image: \`${IMAGE}\`"
+              echo "- Digest: \`${DIGEST}\`"
+              echo "- Pull by digest: \`docker pull ${IMAGE}@${DIGEST}\`"
+              echo
+              echo "Tags:"
+              echo
+              while read -r tag; do
+                echo "- \`${tag}\`"
+              done <<< "${TAGS}"
+            else
+              echo
+              echo "Not published: this is a fork or Dependabot pull request, so the image was built and tested only."
+            fi
+            echo
+            echo "<details>"
+            echo "<summary>Image labels</summary>"
+            echo
+            echo '```text'
+            echo "${LABELS}"
+            echo '```'
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"

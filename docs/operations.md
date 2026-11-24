@@ -154,4 +154,5 @@ just e2e           # build the image; test it with Pushgateway and Prometheus
 `.github/workflows/ci.yml` runs lint, the full test suite on Python 3.12 and 3.13 with the
 real Rustic binary and the service containers, the image end-to-end test, and a build for
 both architectures. Pushes to `main`, pull requests from this repository and published GitHub
-releases publish that multi-architecture image to GHCR.
+releases publish that multi-architecture image to GHCR. The run's summary page lists the
+version, commit, digest, pull command, tags and image labels of the image it built.

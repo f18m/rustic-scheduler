@@ -253,6 +253,13 @@ just e2e          # build the image, test it with Pushgateway and Prometheus
 
 Tests need no AWS account, no production credentials and no real backup data.
 
+
+## Alternatives
+
+* The [Backrest](https://github.com/garethgeorge/backrest) project seems a great option for the Restic backup tool, but does not support Rustic as of today. There is an [open discussion](https://github.com/rustic-rs/rustic/discussions/1160) on that.
+
+* The [rustic_scheduler](https://rustic.cli.rs/ecosystem/rustic-scheduler/) offered by Rustic developer team is a different thing compared to this project: it's meant to simplify the backup of many clients connected to a centralized server.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
