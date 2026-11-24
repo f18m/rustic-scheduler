@@ -1,6 +1,6 @@
 [![GitHub Tag](https://img.shields.io/github/v/tag/f18m/viessmann-optolink2mqtt)](https://github.com/f18m/viessmann-optolink2mqtt/releases)![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/f18m/rustic-scheduler/ci.yml)
 
-# ![favicon](./src/rustic_scheduler/webui/favicon.svg) rustic-scheduler
+# <img src="./src/rustic_scheduler/webui/favicon.svg" width="24" height="24" alt="favicon" /> rustic-scheduler
 
 <div align="center">
 
