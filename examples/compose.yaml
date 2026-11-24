@@ -92,7 +92,7 @@ services:
 
 secrets:
   rustic_password:
-    file: ./secrets/rustic_password
+    file: ./secrets/rustic_password.example
 
 volumes:
   state:
