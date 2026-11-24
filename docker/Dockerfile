@@ -10,7 +10,7 @@ ARG PYTHON_IMAGE=python:3.13.18-slim-bookworm@sha256:a5a7017efc5969e00ae2b91c8eb
 # The package version, normally `scripts/version.sh` (the Git tag). The build has no
 # Git history to derive it from.
 ARG VERSION=0.0.0.dev0
-ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.13.8@sha256:5cc1805e2426484abca4ad46ea783bab281fdb225fd82d8ce6d66a81254bac85
+ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.13.10@sha256:a3ea1357342c1a4bf9a0c53a3deb1b55379aefa037338d8113d5771efa01774f
 
 FROM ${UV_IMAGE} AS uv
 
