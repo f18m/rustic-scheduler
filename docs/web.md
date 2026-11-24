@@ -82,9 +82,10 @@ for the repository, and a backup is followed by its after-backup sequence. The r
   job, and the page asks for confirmation before sending the request.
 - `init` creates the job's repository. It must be listed in `web.operations` **and** the job
   must set `allow_init: true`; otherwise the row is not offered, or the request is refused.
-  The page asks for confirmation first. Rustic refuses `init` when a repository already
-  exists at the location, and the run then fails with Rustic's message. `init` is never
-  scheduled and is never retried. A forget started here
+  The page asks for confirmation first. When a repository already exists at the location,
+  Rustic refuses `init`; the run then **succeeds** with the detail `repository already
+  initialized` and changes nothing. `init` is never scheduled and is never retried.
+  A forget started here
   goes through the same preview and safeguards as any other
   ([maintenance.md](maintenance.md)), including `forget.dry_run`.
 - `operations: []` makes the page read-only.

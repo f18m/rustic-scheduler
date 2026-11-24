@@ -770,4 +770,6 @@ async def test_init_creates_the_repository_and_a_second_init_is_refused(real):
     assert "successfully created" in Path(result.log_file).read_text()
     assert (fresh / "config").exists()
     again = await run(engine, operation=Operation.INIT)
-    assert again.outcome == Outcome.FAILED and "already exists" in again.detail
+    # Rustic refuses a second config with exit status 1: the repository is there, so it succeeds.
+    assert again.outcome == Outcome.SUCCEEDED and again.detail == "repository already initialized"
+    assert "Config file already exists" in Path(again.log_file).read_text()

@@ -119,7 +119,7 @@ const rows = find(getElementById("jobs"), "tbody").children;
 assert.equal(rows.length, 2);
 assert.equal(rows[1].children[0].textContent, "init");
 const description = rows[1].children[1];
-assert.equal(description.children[0], "Creates a new, empty repository at the job's location. Rustic refuses if one is already there.");
+assert.equal(description.children[0], "Creates a new, empty repository at the job's location. If one is already there, nothing changes and the run succeeds.");
 assert.equal(description.children[2].href, "https://rustic.cli.rs/docs/commands/init/intro.html");
 assert.equal(description.children[2].textContent, "Rustic docs");
 assert.equal(rows[0].children[1].children[2].href, "https://rustic.cli.rs/docs/commands/backup/creating_snapshots.html");

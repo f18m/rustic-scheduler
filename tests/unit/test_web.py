@@ -975,6 +975,18 @@ async def test_init_runs_from_the_page_when_the_job_allows_it_and_web_lists_it(s
     assert result.outcome == Outcome.SUCCEEDED and result.trigger == "web"
 
 
+async def test_init_on_an_existing_repository_is_shown_as_succeeded(site):
+    engine, session = await site(
+        job={"allow_init": True},
+        plan={"init": {"exit": 1, "stderr": ["error: Config file already exists. Aborting."]}},
+        operations=["backup", "check", "init"],
+    )
+    async with session.post("/api/v1/jobs/docs/init/run", headers=SENT) as response:
+        assert response.status == 202
+    await engine.wait_idle()
+    assert row(await overview(session), "init")["last_result"]["outcome"] == "succeeded"
+
+
 async def test_init_is_not_offered_when_web_operations_do_not_list_it(site):
     _, session = await site(job={"allow_init": True})
     init = row(await overview(session), "init")
