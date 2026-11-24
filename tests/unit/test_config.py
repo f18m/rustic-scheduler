@@ -191,7 +191,7 @@ def test_example_config_is_valid(monkeypatch):
     root = Path(__file__).resolve().parents[2]
     import yaml
 
-    raw = yaml.safe_load((root / "examples" / "config.yaml").read_text())
+    raw = yaml.safe_load((root / "examples" / "config-complex-example.yaml").read_text())
     raw["rustic"] = raw.get("rustic", {}) | {"profile_dir": str(root / "examples" / "profiles")}
     # The example refers to secret files that only exist in a deployment.
     raw.get("mqtt", {}).pop("password_file", None)
