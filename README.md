@@ -56,7 +56,7 @@ git clone https://github.com/f18m/rustic-scheduler && cd rustic-scheduler/exampl
 cat > profiles/myrepo.toml << 'EOF'
 [repository]
 repository = "/tmp/repo"              # or S3 path like "s3:bucket/path"
-password = "my-backup-password"
+password = "my-backup-password"       # must match secrets/rustic_password
 EOF
 
 # 2. Create a minimal configuration
@@ -79,14 +79,17 @@ jobs:
         keep-weekly: 8
 EOF
 
-# 3. Create the repository (one time)
+# 3. Update the Rustic password in secrets/rustic_password if you changed it above
+# (it's pre-configured with a default value)
+
+# 4. Create the repository (one time)
 docker compose -f compose.yaml run --rm --entrypoint rustic rustic-scheduler -P /etc/rustic-scheduler/profiles/myrepo.toml init
 
-# 4. Start the scheduler
+# 5. Start the scheduler
 docker compose -f compose.yaml up -d
 docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler status
 
-# 5. Run a backup now (optional)
+# 6. Run a backup now (optional)
 docker compose -f compose.yaml exec rustic-scheduler rustic-scheduler trigger mydata --wait
 ```
 

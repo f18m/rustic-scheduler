@@ -11,7 +11,7 @@ name: rustic-scheduler
 services:
   rustic-scheduler:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile
     image: rustic-scheduler:0.1.0
     # Rustic records the host name in every snapshot and groups snapshots by it.
@@ -35,18 +35,15 @@ services:
     environment:
       TZ: Europe/Rome
     volumes:
-      - ./examples/config.yaml:/etc/rustic-scheduler/config.yaml:ro
-      - ./examples/profiles:/etc/rustic-scheduler/profiles:ro
+      - ./config.yaml:/etc/rustic-scheduler/config.yaml:ro
+      - ./profiles:/etc/rustic-scheduler/profiles:ro
       - state:/var/lib/rustic-scheduler
       - cache:/var/cache/rustic
       # Data to back up: always read-only.
       # For the quickstart, change the left side to your actual data folder.
-      - ${DATA_DIR:-.}/examples/data/src:/data/src:ro
+      - ${DATA_DIR:-.}/data/src:/data/src:ro
     secrets:
       - rustic_password
-      - aws_credentials
-      - mqtt_password
-      - apprise.conf
     ports:
       - "127.0.0.1:9300:9300"
       # Web interface, when `web.enabled` is set (docs/web.md). It can start
@@ -77,8 +74,8 @@ services:
     image: prom/prometheus:v3.16.0
     restart: unless-stopped
     volumes:
-      - ./examples/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./examples/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus:/prometheus
     ports:
       - "127.0.0.1:9090:9090"
@@ -88,20 +85,14 @@ services:
     image: eclipse-mosquitto:2.1.2-alpine
     restart: unless-stopped
     volumes:
-      - ./examples/mosquitto:/mosquitto/config
+      - ./mosquitto:/mosquitto/config
       - mosquitto:/mosquitto/data
     expose:
       - "1883"
 
 secrets:
   rustic_password:
-    file: ./examples/secrets/rustic_password
-  aws_credentials:
-    file: ./examples/secrets/aws_credentials
-  mqtt_password:
-    file: ./examples/secrets/mqtt_password
-  apprise.conf:
-    file: ./examples/secrets/apprise.conf
+    file: ./secrets/rustic_password
 
 volumes:
   state:
