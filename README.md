@@ -1,6 +1,6 @@
 [![GitHub Tag](https://img.shields.io/github/v/tag/f18m/viessmann-optolink2mqtt)](https://github.com/f18m/viessmann-optolink2mqtt/releases)![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/f18m/rustic-scheduler/ci.yml)
 
-# rustic-scheduler
+# ![favicon](./src/rustic_scheduler/webui/favicon.svg) rustic-scheduler
 
 <div align="center">
 
@@ -33,12 +33,19 @@ Rustic runs as an external process: the pinned release is **Rustic 0.11.4**, unm
 ## 💡 Why?
 
 I use Rustic to backup my NAS to AWS S3 Cold Storage. 
-Initially I used ad-hoc Bash scripts running on my NAS to do that.
-They did the job but lacked: proper telemetry/observability (backup has completed? when? successfully?), good notification support (e.g. Telegram, email, etc) and flexibility.
+Initially I used ad-hoc Bash scripts running on my NAS to do that; they did the job but these 
+"quick-and-dirty" scripts were lacking:
+
+* proper telemetry/observability: backup has completed? when? successfully? 
+* notification support: via Telegram, email, etc
+* flexibility: scheduling during the day/week, extra operations ("check", "forget", etc)
+
 This is why this project was born: make it easy to run backups with Rustic, with no compromise on flexibility and observability.
 
 
 ## 🚀 Quick start
+
+Assumes you already know the basics of Rustic; at minimum you should have read the [Rustic Getting Started](https://rustic.cli.rs/docs/getting_started.html).
 
 Requirements: Docker with Compose. Supported image platforms: `linux/amd64`, `linux/arm64`.
 
