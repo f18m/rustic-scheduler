@@ -15,7 +15,7 @@ backups on a schedule and tells you, truthfully, what happened.
 - Your own Rustic TOML profiles, used as they are. Rustic merges them; the scheduler never
   parses, rewrites or restricts them.
 - S3 hot/cold repositories, including cold objects in S3 Glacier Deep Archive.
-- Live progress and results on a Prometheus `/metrics` endpoint.
+- Live progress and results on a [Prometheus](https://prometheus.io/) `/metrics` endpoint.
 - Rustic's own completed-backup metrics through a Prometheus Pushgateway sidecar, with
   delivery verified rather than assumed.
 - Optional MQTT notifications for backup start/progress/completion, Snapshot check and forget operations, etc (more than 20 entities provided).
