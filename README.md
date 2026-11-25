@@ -1,4 +1,12 @@
-# rustic-scheduler
+[![GitHub Tag](https://img.shields.io/github/v/tag/f18m/rustic-scheduler)](https://github.com/f18m/rustic-scheduler/releases) ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/f18m/rustic-scheduler/ci.yml)
+
+# <img src="./src/rustic_scheduler/webui/favicon.svg" width="32" height="32" alt="favicon" /> rustic-scheduler
+
+<div align="center">
+
+⭐ If you find this App useful, please star this repo - it helps others discover the project! ⭐
+
+</div>
 
 A small, Docker-friendly service that runs [Rustic](https://github.com/rustic-rs/rustic)
 backups on a schedule and tells you, truthfully, what happened.
@@ -17,214 +25,179 @@ backups on a schedule and tells you, truthfully, what happened.
   a terminal-like window following Rustic's output of each run, ready-to-copy commands for using Rustic directly and, if enabled, a read-only browser for
   each job's snapshots and the files in them.
 - Optional snapshot telemetry, retention (`forget`), `prune` and `check`.
-- No database. History lives in Rustic's snapshots and in Prometheus.
+- No database. History lives in Rustic's snapshots (and in Prometheus if you use it).
 
 Rustic runs as an external process: the pinned release is **Rustic 0.11.4**, unmodified.
 
-> **Status.** Everything described here was exercised against the real Rustic 0.11.4 binary,
-> Pushgateway 1.11.4, Prometheus 3.16.0 and Mosquitto 2.1.2 on local, disposable data.
-> AWS Glacier Deep Archive storage, restores and `check --read-data` have been verified on a
-> production repository. Behaviour of other AWS-specific features (eventual consistency,
-> throttling, IAM policies, pricing) is documented from AWS's documentation and unverified.
-> See [docs/verification.md](docs/verification.md).
 
-## What is on by default, and what can delete data
+## 💡 Why?
 
-| Operation | Default | Effect on the repository |
-|---|---|---|
-| `backup` | on for every job | Adds data and snapshots. Never deletes. |
-| `snapshots` telemetry | **off** | Read-only (`rustic snapshots --json`). |
-| `check` | **off** | Read-only. With `read_data: true` it downloads pack files (cost and delay on cold storage). |
-| `forget` | **off** | **Deletes snapshots** of this job. Needs explicit `keep` rules. |
-| `forget.prune` | **off** | **Deletes repository data** no snapshot uses any more (`forget --prune`). |
-| `prune` | **off** | **Deletes repository data**; acts on the whole repository, not one job. |
-| Repository creation (`init`) | **never** unless `allow_init: true` | Creates a repository. Only on request, and only with `allow_init`: from the web interface (when `web.operations` lists `init`) or `rustic-scheduler trigger JOB init`. |
-| Pushgateway group cleanup | **off** | Deletes stale metric groups in the Pushgateway only. |
-| MQTT, notifications | **off** | None. |
-| MQTT commands | **off** | Lets MQTT messages start `backup` and `check`; `forget` and `prune` only if listed, and only if enabled on the job. |
-| Home Assistant discovery | **off** | None. |
-| Web interface | **off** | Lets its "Run now" buttons start `backup` and `check`; `forget` and `prune` only if listed, and only if enabled on the job. |
-| Web interface: browsing snapshots | **off** | None on the repository (read-only). Shows file names, sizes, times and owners to whoever can open the page. |
-| Web interface: run output | on, when the web interface is on | None (read-only). Shows Rustic's output of each run, secrets masked, to whoever can open the page. |
+I use Rustic to backup my NAS to AWS S3 Cold Storage. 
+Initially I used ad-hoc Bash scripts running on my NAS to do that; they did the job but these 
+"quick-and-dirty" scripts were lacking:
 
-Nothing that deletes anything runs unless you turn it on in the YAML. Destructive options
-found only in a Rustic profile (for example `[forget] prune = true`) are refused at start-up
-until the YAML agrees. A manual request for `forget` or `prune` on a job where it is not
-enabled is refused too.
+* proper telemetry/observability: backup has completed? when? successfully? 
+* notification support: via Telegram, email, etc
+* flexibility: scheduling during the day/week, extra operations ("check", "forget", etc)
 
-## Quick start
+This is why this project was born: make it easy to run backups with Rustic, with no compromise on flexibility and observability.
 
-Requirements: Docker with Compose. Supported image platforms: `linux/amd64`, `linux/arm64`.
+
+## 🚀 Quick start
+
+Assumes you've read the [Rustic Getting Started](https://rustic.cli.rs/docs/getting_started.html). We'll schedule the same `backup` and `forget` operations from that guide.
+
+**Requirements:** Docker with Compose. Supported platforms: `linux/amd64`, `linux/arm64`.
 
 ```sh
-git clone https://github.com/f18m/rustic-scheduler && cd rustic-scheduler
+git clone https://github.com/f18m/rustic-scheduler && cd rustic-scheduler/examples
 
-# 1. Secrets: copy the placeholders and fill them in (see examples/secrets/README.md)
-cd examples/secrets
-for f in *.example; do cp -n "$f" "${f%.example}"; done
-chmod 600 rustic_password aws_credentials mqtt_password apprise.conf
-sudo chown 1000:1000 rustic_password aws_credentials mqtt_password apprise.conf
-cd ../..
+# 1. Create a very basic Rustic profile (like in Rustic Getting Started)
+cat > profiles/myrepo.toml << 'EOF'
+[repository]
+repository = "/var/lib/rustic-scheduler/repo"
+password-file = "/run/secrets/rustic_password"
+EOF
 
-# 2. Edit examples/config.yaml and examples/profiles/*.toml (bucket, region, paths),
-#    and point the source mounts in compose.yaml at your data.
+# Note: The password-file is loaded from Docker Compose secrets (secrets/rustic_password.example)
 
-# 3. Check the configuration with the real Rustic binary, without starting anything
-docker compose run --rm rustic-scheduler validate
+# 2. Create a minimal configuration for rustic-scheduler
+cat > config.yaml << 'EOF'
+scheduler:
+  timezone: Europe/Rome
+  log_level: INFO
 
-# 4. Start the scheduler and the Pushgateway
+web:
+  enabled: true
+  port: 9301
+  operations: [backup, check]
+
+jobs:
+  mydata:
+    profiles: [myrepo]
+    sources: [/data/src]    # your data folder (see compose.yaml)
+    schedule:
+      days: daily
+      times: ["02:30"]
+    forget:
+      enabled: true
+      dry_run: false
+      keep:
+        keep-daily: 14
+        keep-weekly: 8
+EOF
+
+# 3. Create the repository (one time only)
+docker compose run --rm --entrypoint rustic sched -P /etc/rustic-scheduler/profiles/myrepo.toml init
+
+# 4. Start the scheduler
 docker compose up -d
-docker compose exec rustic-scheduler rustic-scheduler status
+docker compose exec sched rustic-scheduler status
+
+# 5. Run a backup now (optional)
+docker compose exec sched rustic-scheduler trigger mydata --wait
 ```
 
-The scheduler never creates a repository on its own. Create it once, by hand (or, with `allow_init: true` on the job, with `rustic-scheduler trigger JOB init` or from the web page):
+**Open the web interface:** Once the scheduler is running, open `http://localhost:9301` in your browser to see backups, run operations, and browse snapshots.
 
-```sh
-docker compose run --rm --entrypoint rustic rustic-scheduler \
-  -P /etc/rustic-scheduler/profiles/s3-deep-archive.toml init
-```
+**To use your own data:** Edit `docker-compose.yaml` and change the `DATA_DIR` environment variable (or the left side of the mount path) to point to your actual folder. The right side must stay `/data/src` to match the configuration.
 
-Run a job now instead of waiting for its schedule, and wait for the real result:
-
-```sh
-docker compose exec rustic-scheduler rustic-scheduler trigger documents --wait
-```
-
-To try it without AWS, use `examples/profiles/local-test.toml` as the job's profile.
-
-## Configuration in one screen
+## 📋 Minimal configuration example
 
 ```yaml
 scheduler:
-  timezone: Europe/Rome          # default for schedules
-
-pushgateway:
-  url: http://pushgateway:9091   # where Rustic pushes its own metrics
+  timezone: Europe/Rome              # timezone for all schedules
 
 jobs:
-  documents:
-    profiles: [s3-deep-archive, documents]   # Rustic TOML profiles, in order
-    sources: [/data/documents]               # one or more folders, one snapshot
+  mydata:
+    profiles: [myrepo]               # your Rustic TOML profile
+    sources: [/data/src]             # folder to backup
     schedule:
-      days: [mon, wed, fri]                  # or `daily`
-      times: ["02:30", "14:30"]
-      timezone: Europe/Rome                  # optional per schedule
-    snapshots: {enabled: true}               # telemetry after each backup: count, size and files of the latest snapshot
+      days: daily                    # or [mon, wed, fri]
+      times: ["02:30"]
     forget:
-      enabled: true
-      dry_run: true                          # preview until you remove this
-      keep: {keep-daily: 14, keep-weekly: 8}
+      enabled: true                  # optional: clean up old snapshots
+      keep:
+        keep-daily: 14               # keep daily snapshots for 14 days
+        keep-weekly: 8               # keep weekly snapshots for 8 weeks
 ```
 
-- Full reference: [docs/configuration.md](docs/configuration.md)
-- Complete example: [examples/config.yaml](examples/config.yaml), profiles in
-  [examples/profiles/](examples/profiles/)
+That's it. See [docs/configuration.md](docs/configuration.md) for all available options (additional backup timeout, snapshot telemetry, check operations, notifications, etc).
 
-Configuration is validated before any work is scheduled, using the real Rustic binary to
-load your profiles. Every problem is reported at once, with its location and what to do:
+## 🔭 What to do next
 
+Your backups are running on schedule. Here's what you can do:
+
+**Check status:**
+```sh
+cd examples
+docker compose exec sched rustic-scheduler status
+docker compose logs -f sched
 ```
-error: jobs.documents.schedule.times: cannot read '2:30' as a time; use 24-hour HH:MM such as 02:30
-error: jobs.media: the profiles set [backup] label = 'pics' but the scheduler would pass 'media'
-       and override it. Remove it from the profile or set `label: pics` on the job.
+
+**View Rustic snapshots and operations:**
+```sh
+cd examples
+docker compose exec sched rustic-scheduler rustic mydata -- snapshots
+docker compose exec sched rustic-scheduler rustic mydata -- ls latest
+docker compose exec sched rustic-scheduler forget-preview mydata
 ```
 
-## How it behaves
+**Advanced setup** (optional features):
+- **Prometheus metrics:** Uncomment `pushgateway` in `docker-compose.yaml` and configure Prometheus scraping (see [examples/prometheus/](examples/prometheus/))
+- **Web interface:** Set `web.enabled: true` in config.yaml and open `http://localhost:9301`
+- **MQTT notifications:** Set `mqtt.enabled: true` and connect Home Assistant or other clients
+- **Email/Telegram/etc:** Set `notifications.enabled: true` and configure Apprise (see [docs/notifications.md](docs/notifications.md))
 
-The short version; details and rationale are in [docs/behaviour.md](docs/behaviour.md).
+**Learn more** about all options in [docs/configuration.md](docs/configuration.md).
 
-| Situation | Behaviour |
-|---|---|
-| Two jobs use the same repository | They run one after the other, in arrival order. Never concurrently. |
-| Jobs on different repositories | Run in parallel. |
-| A job is still running at its next scheduled time | The new run is **skipped** and counted. Runs never pile up. |
-| A run waits too long for a busy repository | Skipped after `repository_wait_timeout` (default 6h). |
-| Scheduler was down at a scheduled time | Per job: `catch_up` (default) runs once at start-up if the run is provably missing and within `misfire_grace`; `skip` waits for the next time. |
-| Host suspended, clock jumped forward | All passed occurrences collapse into at most one run. |
-| Clock moved backwards | Nothing runs twice. |
-| Local time that does not exist (spring forward) | Runs once, shifted by the gap (02:30 becomes 03:30). |
-| Local time that occurs twice (fall back) | Runs once, at the first occurrence. |
-| Timeout reached | Rustic gets SIGTERM, then SIGKILL after `stop_grace`. Outcome `failed`. |
-| Container stops | Running Rustic is stopped the same way. Outcome `interrupted`. Queued work is dropped. |
-| Scheduler crashes mid-run | After restart the run is reported as `unknown`, never as success. |
-| Manual run (CLI, or MQTT message or web interface if enabled) | Queues like a scheduled run; refused if that job is already queued or running. |
+## 📋 Safety: what can delete data
 
-### Outcomes
+By default, **only `backup` runs**. It never deletes anything from your repository.
 
-Every operation ends in exactly one of five states:
+`forget` is **disabled by default**. When you enable it, it will only delete snapshots according to your `keep` rules. It **does not** delete the data itself (`prune`) unless you explicitly turn that on.
 
-| Outcome | Meaning |
-|---|---|
-| `succeeded` | Rustic exited 0, was not interrupted and, for a backup, reported its summary. |
-| `failed` | Rustic reported an error, timed out, was killed, or could not be started. |
-| `skipped` | The run never started. |
-| `interrupted` | The run started and was stopped by shutdown or a signal. |
-| `unknown` | The run started but its result cannot be established. |
+Nothing destructive runs unless you explicitly enable it in the configuration YAML.
 
-Queued or running is never reported as a result. Rustic's exit status alone is never trusted:
-Rustic 0.11.4 exits with status **0** when it is interrupted by SIGTERM or SIGINT. Telemetry,
-MQTT, notification and Pushgateway delivery results are tracked separately and never change a
-Rustic outcome.
 
-### After a backup
+## 💻 Rustic CLI: direct use
 
-If enabled with `after_backup`, in this order: `check`, then `forget`, then `snapshots`.
-`check` and `forget` only run after a succeeded backup, and `forget` does not run if that
-check failed. Snapshot telemetry always runs. The repository stays locked for the whole
-sequence.
-
-## Observability
-
-Prometheus scrapes **two endpoints**. A single combined endpoint is not provided.
-
-| Endpoint | Content |
-|---|---|
-| `rustic-scheduler:9300/metrics` | Scheduler state, live progress, results, snapshot telemetry, delivery health (`rustic_scheduler_*`) |
-| `pushgateway:9091/metrics` | Rustic's own completed-backup metrics (`rustic_backup_*`), with `honor_labels: true` |
-
-A working scrape configuration and alert rules are in
-[examples/prometheus/](examples/prometheus/). Metric reference, Pushgateway retention and
-clean-up: [docs/metrics.md](docs/metrics.md).
-
-Other endpoints on port 9300: `/healthz` and `/readyz` (both follow the scheduling loop's
-heartbeat, not merely "the port answers") and `/api/v1/status` (JSON with full diagnostics).
-
-- MQTT topics, payloads, commands and Home Assistant: [docs/mqtt.md](docs/mqtt.md)
-- Web interface (`web.enabled`, port 9301): [docs/web.md](docs/web.md)
-- Notifications: [docs/notifications.md](docs/notifications.md)
-
-## Working on the repository yourself
-
-The repository is an ordinary Rustic repository; nothing about it is scheduler-specific.
-Use Rustic directly, from anywhere, with your own profiles. From inside the container, this
-helper adds a job's profiles and environment for you:
+You can use Rustic directly from anywhere with your own profiles and credentials. For convenience, the scheduler provides helpers that load your job's profiles and environment:
 
 ```sh
-docker compose exec rustic-scheduler rustic-scheduler rustic documents -- snapshots
-docker compose exec rustic-scheduler rustic-scheduler rustic documents -- ls latest
-docker compose exec rustic-scheduler rustic-scheduler forget-preview documents   # changes nothing
+cd examples
+
+# List snapshots
+docker compose exec sched rustic-scheduler rustic mydata -- snapshots
+
+# Browse latest snapshot
+docker compose exec sched rustic-scheduler rustic mydata -- ls latest
+
+# See what forget would remove (no changes)
+docker compose exec sched rustic-scheduler forget-preview mydata
 ```
 
-For commands that change the repository (`forget`, `prune`, `repair`, ...) the helper first
-waits for the scheduler's repository lock, so it never overlaps a scheduled operation.
+Your repository is a standard Rustic repository; nothing about it is scheduler-specific.
 
-The optional [web interface](docs/web.md) shows these commands filled in for each job.
-
-## Commands
+## 💻 Commands
 
 ```
 rustic-scheduler [-c CONFIG] COMMAND
   run                      run the scheduler (container default)
-  validate [--offline]     check the configuration and exit
-  status [--json]          state of the running scheduler
-  trigger JOB [OPERATION] [--wait]   run backup (default), snapshots, check, forget or prune now
-  show-command JOB [OPERATION]       print the exact Rustic command line
-  forget-preview JOB       list what forget would remove; changes nothing
-  rustic JOB -- ARGS...    run Rustic by hand with the job's profiles
-  healthcheck              exit 0 if the scheduler is ready
+  status [--json]          show scheduler state and next scheduled run
+  trigger JOB [--wait]     run a backup now (use rustic-scheduler trigger -h for all operations)
+  validate                 check the configuration and exit
 ```
 
-## Documentation
+See all available commands and operations:
+
+```sh
+cd examples
+docker compose exec rustic-scheduler rustic-scheduler --help
+docker compose exec rustic-scheduler rustic-scheduler trigger --help
+```
+
+## 📝 Documentation
 
 | Topic | File |
 |---|---|
@@ -242,7 +215,7 @@ rustic-scheduler [-c CONFIG] COMMAND
 | Deployment, upgrades, troubleshooting | [docs/operations.md](docs/operations.md) |
 | What was verified, and what was not | [docs/verification.md](docs/verification.md) |
 
-## Development
+## 🛠️ Development
 
 ```sh
 just setup        # Python dependencies (uv) and the pinned Rustic binary in .tools/

@@ -19,7 +19,7 @@ VERSION="${VERSION:-$("$ROOT/scripts/version.sh")}"
 docker build -q --build-arg VERSION="$VERSION" -f "$ROOT/docker/Dockerfile" -t "$IMAGE" "$ROOT" >/dev/null
 
 # The Prometheus example configuration, unchanged except for a faster interval.
-sed 's/scrape_interval: 30s/scrape_interval: 2s/' "$ROOT/examples/prometheus/prometheus.yml" > prometheus.yml
+sed 's/scrape_interval: 30s/scrape_interval: 2s/' "./prometheus/prometheus.yml" > prometheus.yml
 chmod 644 prometheus.yml rustic_password
 
 step "prepare volumes: a source with a file only root can read, and a writable state dir"

@@ -67,12 +67,10 @@ code { background: var(--code-bg); padding: 1px 4px; border-radius: 4px; }
   margin-bottom: 16px;
 }
 .card-head { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; margin-bottom: 8px; }
+.card-head button { margin-left: auto; }
 
 .card .description { margin: 0 0 6px; }
 .card .snapshot { margin: 0 0 10px; }
-.card-links { margin: 10px 0 0; }
-.card-links a.icon-link { font-size: 20px; text-decoration: none; }
-.card-links a.icon-link:hover { text-decoration: underline; }
 
 .scroll { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
@@ -145,7 +143,7 @@ button {
   cursor: pointer;
   white-space: nowrap;
 }
-button.danger { background: transparent; border-color: var(--bad); color: var(--bad); }
+button.danger { background: var(--bad); border-color: var(--bad); color: var(--accent-text); }
 button.plain { background: transparent; color: var(--accent); padding: 2px 10px; font-size: 13px; }
 button.link {
   background: transparent;
