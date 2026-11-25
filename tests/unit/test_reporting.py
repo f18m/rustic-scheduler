@@ -165,6 +165,38 @@ def test_events_and_rendering():
     assert "3 new, 1 changed, 5 unmodified" in body
 
 
+@pytest.mark.parametrize(
+    ("value", "count", "size"),
+    [
+        (0, "0", "0 bytes"),
+        (4, "4", "4 bytes"),
+        (999, "999", "999 bytes"),
+        (1000, "1k", "1kbytes"),
+        (1234, "1.2k", "1.2kbytes"),
+        (9_960, "10k", "10kbytes"),
+        (359_486, "359k", "359kbytes"),
+        (999_499, "999k", "999kbytes"),
+        (999_500, "1M", "1Mbytes"),
+        (86_136_747, "86M", "86Mbytes"),
+        (1_500_000_000, "1.5G", "1.5Gbytes"),
+    ],
+)
+def test_counts_and_sizes_are_easy_to_read(value, count, size):
+    _, body = render(result(data={"files_unmodified": value, "data_added_packed": value}))
+    assert f"{count} unmodified" in body
+    assert f"Added to repository: {size}" in body
+
+
+def test_missing_or_unreported_counts_stay_unknown_and_are_never_zero():
+    _, body = render(
+        result(data={"files_new": None, "files_changed": True, "data_added_packed": -1})
+    )
+    assert "Files: ? new, ? changed, ? unmodified" in body
+    assert "Added to repository: ?" in body
+    _, body = render(result(Operation.FORGET, data={"removed": 1234, "kept": "many"}))
+    assert "Snapshots: removed 1.2k, kept ?" in body
+
+
 class StubTarget:
     def __init__(self, behaviour):
         self.behaviour = behaviour
