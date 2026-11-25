@@ -55,15 +55,21 @@ version:
 validate config="examples/config.yaml":
     uv run rustic-scheduler -c {{config}} validate
 
-# Run the scheduler with its web interface on a throwaway repository (needs `just setup`)
+# Run the scheduler with every web feature on, against a throwaway repository (needs `just setup`)
 manual-test:
     #!/usr/bin/env bash
     set -euo pipefail
     dir=/tmp/rustic-scheduler-manual
-    mkdir -p "$dir/src" "$dir/repo"
+    mkdir -p "$dir/src/docs" "$dir/quick" "$dir/repo"
     [ -f "$dir/password" ] || echo "manual-test-password" > "$dir/password"
+    [ -f "$dir/web-password" ] || echo "manual-test-web-password" > "$dir/web-password"
     [ -f "$dir/src/file.txt" ] || echo hello > "$dir/src/file.txt"
+    [ -f "$dir/src/docs/readme.txt" ] || echo "a file in a directory" > "$dir/src/docs/readme.txt"
+    [ -f "$dir/quick/note.txt" ] || echo "the quick job" > "$dir/quick/note.txt"
+    # One new file per start, so that every start adds a snapshot
+    echo "started $(date -u)" > "$dir/src/run-$(date +%s).txt"
     [ -f "$dir/repo/config" ] || .tools/rustic -P tests/manual/profiles/repo.toml init
+    uv run rustic-scheduler -c tests/manual/config.yaml run
     uv run rustic-scheduler -c tests/manual/config.yaml run
 
 # Everything CI runs

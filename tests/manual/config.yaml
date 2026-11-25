@@ -1,6 +1,7 @@
-# Configuration for `just manual`: the web interface on a throwaway repository.
-# Paths are relative to the repository root (the directory `just` runs in), except the
-# sources and the repository, which live under /tmp/rustic-scheduler-manual.
+# Configuration for `just manual-test`: the web interface with every operation, the snapshot
+# browser and HTTP Basic authentication on, against a throwaway repository. Log in as `tester`
+# with the password in /tmp/rustic-scheduler-manual/web-password. Paths are relative to the
+# repository root, except sources and the repository, which live under /tmp/rustic-scheduler-manual.
 scheduler:
   timezone: UTC
   state_dir: /tmp/rustic-scheduler-manual/state
@@ -10,9 +11,37 @@ rustic:
 web:
   enabled: true
   port: 9301
-  operations: [backup, check]
+  public_url: http://127.0.0.1:9301/
+  operations: [init, backup, snapshots, check, forget, prune]
+  auth:
+    enabled: true
+    username: tester
+    password_file: /tmp/rustic-scheduler-manual/web-password
+  browse:
+    enabled: true
+  run_logs:
+    enabled: true
 jobs:
   demo:
+    description: Every operation enabled; forget keeps the last two snapshots
     profiles: [repo]
     sources: [/tmp/rustic-scheduler-manual/src]
     schedule: {days: daily, times: ["02:30"]}
+    allow_init: true
+    snapshots: {enabled: true}
+    check:
+      enabled: true
+      after_backup: true
+      schedule: {days: [sun], times: ["04:00"]}
+    forget:
+      enabled: true
+      keep: {keep-last: 2}
+      max_remove: 10
+      after_backup: true
+    prune:
+      enabled: true
+  quick:
+    description: A second job with its own label, started on request only
+    profiles: [repo]
+    label: quick
+    sources: [/tmp/rustic-scheduler-manual/quick]

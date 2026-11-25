@@ -29,6 +29,54 @@ backups on a schedule and tells you, truthfully, what happened.
 
 Rustic runs as an external process: the pinned release is **Rustic 0.12.0**, unmodified.
 
+## 🖼️ Web UI Screenshots
+
+These are screenshots from the app UI v0.7.1.
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <strong>Jobs</strong><br/>
+      Each job is a scheduled backup activity on a Rustic repository
+      <br/><br/>
+      <img src="docs/screenshots/webui-jobs.png" alt="Jobs summary" width="100%"/>
+    </td>
+    <td align="center" width="50%">
+      <strong>Operation output</strong><br/>
+      Output of each Rustic command can be inspected from web UI directly
+      <br/><br/>
+      <img src="docs/screenshots/webui-operation-output.png" alt="Output" width="100%"/>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <strong>Snapshot Browsing</strong><br/>
+      View all snapshots associated with a job
+      <br/><br/>
+      <img src="docs/screenshots/webui-snapshots.png" alt="Snapshots" width="100%"/>
+    </td>
+    <td align="center" width="50%">
+      <strong>Recent runs</strong><br/>
+      Get quick view of last runs and their success/failure status
+      <br/><br/>
+      <img src="docs/screenshots/webui-recent-runs.png" alt="Recent runs" width="100%"/>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <strong>Notifications</strong><br/>
+      Example of notifications in Telegram. All popular notification services are supported via Apprise.
+      <br/><br/>
+      <img src="docs/screenshots/telegram-notifications.png" alt="Notifications" width="100%"/>
+    </td>
+    <td align="center" width="50%">
+      <strong>Observability</strong><br/>
+      Build beautiful and complete Grafana dashboards. Pair with Prometheus Alerts to get alerted in case of backup failures.
+      <br/><br/>
+      <img src="docs/screenshots/grafana-dashboard.png" alt="Grafana" width="100%"/>
+    </td>
+  </tr>
+</table>
 
 ## 💡 Why?
 
@@ -222,6 +270,8 @@ just setup        # Python dependencies (uv) and the pinned Rustic binary in .to
 just lint         # ruff format, ruff check, mypy --strict
 just test         # unit + integration tests (real Rustic; Docker for the service tests)
 just e2e          # build the image, test it with Pushgateway and Prometheus
+just e2e-down     # remove the e2e containers and volumes (after `tests/e2e/run.sh --keep`)
+just manual-test       # run the scheduler and its web interface (http://127.0.0.1:9301/) on a throwaway repository
 ```
 
 Tests need no AWS account, no production credentials and no real backup data.
