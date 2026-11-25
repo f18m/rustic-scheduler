@@ -1,6 +1,6 @@
 # How the scheduler uses Rustic
 
-Rustic 0.11.4 runs as an unmodified external program. The scheduler builds a command line,
+Rustic 0.12.0 runs as an unmodified external program. The scheduler builds a command line,
 starts the process, reads its output and reports the result. Everything on this page was
 checked against that binary (see [verification.md](verification.md)).
 
@@ -15,9 +15,9 @@ rustic -P /etc/rustic-scheduler/profiles/s3-deep-archive.toml -P /etc/rustic-sch
 It does not read, merge, rewrite or restrict them. Any option Rustic accepts may be used,
 including `[global.env]`, hooks, `use-profiles`, `[[backup.snapshots]]`, `[copy]` and
 backend options. Reference:
-<https://github.com/rustic-rs/rustic/blob/v0.11.4/config/README.md>.
+<https://github.com/rustic-rs/rustic/blob/v0.12.0/config/README.md>.
 
-How Rustic 0.11.4 finds and merges profiles:
+How Rustic 0.12.0 finds and merges profiles:
 
 - A profile name gets `.toml` appended unless it already ends in `.toml`.
 - A relative name is searched in `$XDG_CONFIG_HOME/rustic/` (or `~/.config/rustic/`), then
@@ -88,7 +88,7 @@ profile's `tags` or `label` instead of adding to it, which is why the scheduler 
 tags. And `[backup] init = true` or `[global] dry-run = true` in a profile is refused at
 start-up unless allowed (`allow_init`), because either would change what a backup means.
 
-An `init` run is `rustic -P <profiles> init`, with nothing added. Rustic 0.11.4 prints no
+An `init` run is `rustic -P <profiles> init`, with nothing added. Rustic 0.12.0 prints no
 summary for it and exits 0 when it is interrupted, so the run succeeds only when Rustic
 also prints `repository <id> successfully created`. Without that line the result is
 `unknown`; a repository that already exists makes Rustic exit 1 and the result `failed`.
@@ -151,7 +151,7 @@ snapshot, unchanged ones included.
 **Files of a snapshot** (`cat tree <id>:<path>`, web interface only): `{"nodes": [...]}`, one
 node per entry of that directory. The scheduler uses `name`, `type` (`file`, `dir`,
 `symlink`, ...), `size` (files), `mtime`, `ctime`, the permission bits of `mode`, `user`,
-`group`, `uid`, `gid` and `linktarget`. `ls --json` is not used because in Rustic 0.11.4 it
+`group`, `uid`, `gid` and `linktarget`. `ls --json` is not used because in Rustic 0.12.0 it
 prints names only. The web interface's snapshot list also uses `paths`, `tags` and, from
 `summary`, `total_files_processed` and `data_added_packed`.
 
@@ -172,7 +172,7 @@ Warnings and errors are logged at their own level.
 
 ## Using another Rustic version
 
-The scheduler warns at start-up when the binary is not 0.11.4. Before upgrading Rustic, run
+The scheduler warns at start-up when the binary is not 0.12.0. Before upgrading Rustic, run
 the integration tests against the new binary (`RUSTIC_BIN=/path/to/rustic just test`): they
 check the JSON fields, merge order, exit statuses and interruption behaviour this page
 relies on. See [operations.md](operations.md#upgrading).

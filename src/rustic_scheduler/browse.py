@@ -1,6 +1,6 @@
 """Read-only snapshot and file listings for the web interface (``web.browse``).
 
-Two Rustic commands are used, both verified against Rustic 0.11.4:
+Two Rustic commands are used, both verified against Rustic 0.12.0:
 
 * ``rustic snapshots --json --filter-label ... [--filter-host ...]``: the job's snapshots;
 * ``rustic cat tree SNAPSHOT:PATH``: one directory of a snapshot as
@@ -84,7 +84,7 @@ def _entry(node: dict[str, Any]) -> dict[str, Any]:
 
 
 def _rustic_message(process: ProcessResult) -> str | None:
-    """The line after "Message:" in Rustic 0.11.4's error report, which says what is wrong.
+    """The line after "Message:" in Rustic 0.12.0's error report, which says what is wrong.
 
     (The line starting with "error:" only names the kind of error.)
     """

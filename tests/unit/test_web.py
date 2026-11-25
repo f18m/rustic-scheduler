@@ -38,7 +38,7 @@ async def site(sandbox):
             | (scheduler or {}),
         )
         engine = await sandbox.engine(config)
-        runner = web.AppRunner(create_app(engine, config.web, "0.11.4"))
+        runner = web.AppRunner(create_app(engine, config.web, "0.12.0"))
         await runner.setup()
         tcp = web.TCPSite(runner, "127.0.0.1", 0)
         await tcp.start()
@@ -127,7 +127,7 @@ async def test_overview_lists_operations_and_what_may_be_started(site):
         job={"check": {"enabled": True}, "forget": {"enabled": True, "keep": {"keep-last": 1}}}
     )
     data = await overview(session)
-    assert data["rustic_version"] == "0.11.4" and data["history"] == []
+    assert data["rustic_version"] == "0.12.0" and data["history"] == []
     names = [o["operation"] for o in data["jobs"][0]["operations"]]
     assert names == ["backup", "forget", "check"]  # snapshots and prune are not enabled
     assert row(data, "backup")["can_run"] and row(data, "check")["can_run"]
@@ -596,7 +596,7 @@ async def test_rustic_errors_are_reported_and_secrets_masked(site, sandbox):
         plan=BROWSE
         | {
             "cat": [
-                # The shape of Rustic 0.11.4's error report.
+                # The shape of Rustic 0.12.0's error report.
                 {
                     "exit": 1,
                     "stderr": [
@@ -709,7 +709,7 @@ async def test_web_server_listens_and_stops(sandbox):
         port = probe.getsockname()[1]
     config = sandbox.config(web={"enabled": True, "host": "127.0.0.1", "port": port})
     engine = await sandbox.engine(config)
-    server = WebServer(engine, config.web, "0.11.4")
+    server = WebServer(engine, config.web, "0.12.0")
     await server.start()
     try:
         async with aiohttp.ClientSession() as session:

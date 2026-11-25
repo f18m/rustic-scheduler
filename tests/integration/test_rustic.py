@@ -70,7 +70,7 @@ async def test_backup_with_live_json_progress_and_no_mqtt(real):
 
 
 async def test_the_web_page_follows_rustics_output_while_it_runs(real):
-    """Rustic 0.11.4 writes its log lines as it goes, so the page can show them live."""
+    """Rustic 0.12.0 writes its log lines as it goes, so the page can show them live."""
     for index in range(4):
         (real.source / f"random{index}.bin").write_bytes(os.urandom(48_000_000))
     config = real.config(web={"enabled": True})
@@ -144,6 +144,24 @@ async def test_missing_source_is_a_failed_backup(real):
     assert metric(engine.metrics, "rustic_scheduler_operation_last_outcome", labels) == 1
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can read a file whatever its mode")
+async def test_unreadable_source_file_is_a_failed_backup_even_though_a_snapshot_is_saved(real):
+    """Rustic 0.12.0 exits with status 3 when it cannot read a source file. It still saves a
+    snapshot without that file, so the exit status is the only sign; it must not be a success."""
+    locked = real.source / "locked.txt"
+    locked.write_text("secret\n")
+    locked.chmod(0)
+    try:
+        engine = await real.engine()
+        result = await run(engine)
+    finally:
+        locked.chmod(0o644)
+    assert result.outcome == Outcome.FAILED and result.reason == Reason.EXIT_CODE
+    assert result.exit_code == 3
+    assert "locked.txt" in result.detail
+    assert len(real.snapshots()) == 1
+
+
 async def test_wrong_password_is_a_failed_backup_and_is_not_logged(real):
     engine = await real.engine()
     real.password_file.write_text("not-the-password-123")
@@ -202,7 +220,7 @@ async def test_shutdown_interrupts_a_real_backup_and_no_snapshot_appears(real):
         pytest.fail("the backup never reported progress")
     await asyncio.wait_for(engine.shutdown(), 30)
     result = engine.last_results[("docs", Operation.BACKUP)]
-    # Rustic 0.11.4 exits with status 0 here; the scheduler must not call it success.
+    # Rustic 0.12.0 exits with status 0 here; the scheduler must not call it success.
     assert result.outcome == Outcome.INTERRUPTED and result.reason == Reason.SHUTDOWN
     assert result.exit_code == 0
     assert real.snapshots() == []
@@ -519,7 +537,7 @@ async def test_forget_with_prune_and_standalone_prune_on_disposable_data(real):
     schedule = {"days": "daily", "times": "04:00"}
     job = real.job(
         forget={"enabled": True, "keep": {"keep-last": 1}, "prune": True},
-        prune={"enabled": True, "schedule": schedule, "extra_args": ["--keep-delete", "0s"]},
+        prune={"enabled": True, "schedule": schedule, "extra_args": ["--keep-marked", "0s"]},
         check={"enabled": True, "after_backup": True, "read_data": True},
     )
     engine = await real.engine(real.config({"docs": job}))
@@ -534,7 +552,7 @@ async def test_forget_with_prune_and_standalone_prune_on_disposable_data(real):
 
     prune = await run(engine, operation=Operation.PRUNE)
     assert prune.outcome == Outcome.SUCCEEDED
-    assert "--keep-delete" in Path(prune.log_file).read_text() or prune.exit_code == 0
+    assert "--keep-marked" in Path(prune.log_file).read_text() or prune.exit_code == 0
     # The repository is still consistent and the remaining snapshot restorable.
     assert real.rustic("check", "--read-data").returncode == 0
     target = real.root / "restored"
@@ -674,7 +692,7 @@ async def test_web_interface_starts_real_runs_and_its_manual_commands_work(real,
     rustic("check")
     target = short_tmp / "restored"
     rustic("restore", "--dry-run", snap["id"], str(target))
-    # Rustic 0.11.4 creates the empty target directory even for a dry run, and nothing else.
+    # Rustic 0.12.0 creates the empty target directory even for a dry run, and nothing else.
     assert not target.exists() or list(target.iterdir()) == []
     rustic("restore", f"{snap['id']}:{real.source}", str(target))
     assert (target / "a.txt").read_text() == "alpha\n"
@@ -773,3 +791,19 @@ async def test_init_creates_the_repository_and_a_second_init_is_refused(real):
     # Rustic refuses a second config with exit status 1: the repository is there, so it succeeds.
     assert again.outcome == Outcome.SUCCEEDED and again.detail == "repository already initialized"
     assert "Config file already exists" in Path(again.log_file).read_text()
+
+
+async def test_an_init_section_in_a_profile_creates_no_repository(real):
+    """`[init]` (new in Rustic 0.12.0) only sets how `init` creates a repository. A backup of a
+    missing repository must fail, not create one."""
+    missing = real.root / "missing-repo"
+    real.profile(
+        "with-init",
+        f'[repository]\nrepository = "{missing}"\npassword-file = "{real.password_file}"\n'
+        "no-cache = true\n[init]\nset-version = 2\n",
+    )
+    engine = await real.engine(real.config({"docs": real.job(profiles=["with-init"])}))
+    result = await run(engine)
+    assert result.outcome == Outcome.FAILED
+    assert "No repository config file" in Path(result.log_file).read_text()
+    assert not missing.exists()

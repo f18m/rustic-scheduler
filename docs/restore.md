@@ -3,7 +3,7 @@
 A backup is only as good as its restore. Practise this before you need it.
 
 The scheduler does not restore; it is done with Rustic, by you. Nothing about the repository
-is scheduler-specific, so any machine with Rustic 0.11.4, the repository password and
+is scheduler-specific, so any machine with Rustic 0.12.0, the repository password and
 credentials can restore, with or without this project.
 
 > The local walkthrough below was run as written. The Glacier part was **not** run against
@@ -151,7 +151,7 @@ after forget and prune.
 
 ## If the scheduler's host is lost
 
-1. Install Rustic 0.11.4 on any machine.
+1. Install Rustic 0.12.0 on any machine.
 2. Recreate the repository profile (bucket, region, prefixes) and provide the password and
    AWS credentials.
 3. `rustic -P repo.toml snapshots`, then restore as above.

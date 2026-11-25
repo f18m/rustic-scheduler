@@ -75,7 +75,7 @@ To create a new one, run `rustic init` yourself once (see the README).
 
 ## Credentials
 
-Rustic 0.11.4 reaches S3 through OpenDAL 0.58. Preferred setup: a **shared credentials file**
+Rustic 0.12.0 reaches S3 through OpenDAL 0.59. Preferred setup: a **shared credentials file**
 mounted as a secret, named by `AWS_SHARED_CREDENTIALS_FILE`.
 
 ```yaml

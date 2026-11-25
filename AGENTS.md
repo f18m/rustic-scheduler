@@ -51,7 +51,7 @@ with `uv`; do not add dependencies without a reason and update `uv.lock` when yo
 
 ## Invariants: do not break these
 
-1. **Never trust Rustic's exit status alone.** Rustic 0.11.4 exits 0 when interrupted by
+1. **Never trust Rustic's exit status alone.** Rustic 0.12.0 exits 0 when interrupted by
    SIGTERM or SIGINT. A backup is `succeeded` only if Rustic emitted its JSON summary and the
    scheduler did not stop it. See `classify` and `_backup` in `engine.py`.
 2. **Five outcomes, one per run:** `succeeded`, `failed`, `skipped`, `interrupted`,

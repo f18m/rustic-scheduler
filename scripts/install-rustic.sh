@@ -3,14 +3,14 @@
 # Usage: scripts/install-rustic.sh [DEST_DIR]   (default: .tools)
 set -eu
 
-VERSION="0.11.4"
+VERSION="0.12.0"
 DEST="${1:-.tools}"
 
 case "$(uname -s)-$(uname -m)" in
-  Linux-x86_64)               TARGET="x86_64-unknown-linux-musl";  SHA256="628b26785f3787fa1d52e61b3289493f483230a1ed6e86a84ae9c76d7a41a81e" ;;
-  Linux-aarch64|Linux-arm64)  TARGET="aarch64-unknown-linux-musl"; SHA256="35ccd40ff565b9760245dd391f9fef04c46778ce5e073d833288abe2e5eabd20" ;;
-  Darwin-arm64)               TARGET="aarch64-apple-darwin";       SHA256="6df166f68876f1bd1e0965547542374877f04ab498cbb5e19b1b155844bce307" ;;
-  Darwin-x86_64)              TARGET="x86_64-apple-darwin";        SHA256="ff0014a53f10965bc7852945ad4ac52532ad8af0efe5e4f4957dd330889946de" ;;
+  Linux-x86_64)               TARGET="x86_64-unknown-linux-musl";  SHA256="c7dc0772bb6e81f9acdcd7c2642c076c99455b20e3a57b2dfc1b7caee0035184" ;;
+  Linux-aarch64|Linux-arm64)  TARGET="aarch64-unknown-linux-musl"; SHA256="192d0701216edecba4d523b5ce0e1183b3904140791789ee4974bf70b41b483b" ;;
+  Darwin-arm64)               TARGET="aarch64-apple-darwin";       SHA256="a8f7ddf306bdad9dca7670fba9a009509300190f84fe7fb8efde5997ccd37348" ;;
+  Darwin-x86_64)              TARGET="x86_64-apple-darwin";        SHA256="39e71b0c745a416de6258018e5a74cf5ee80749a6e14a55b686dd671d9ec529a" ;;
   *) echo "unsupported platform: $(uname -s)-$(uname -m)" >&2; exit 1 ;;
 esac
 

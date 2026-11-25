@@ -50,9 +50,9 @@ TICK = 5.0
 #: A run that starts this late is still an on-time scheduled run.
 ON_TIME = timedelta(seconds=60)
 _FRACTION = re.compile(r"(\.\d{6})\d+")
-#: Rustic 0.11.4's line after a successful `init`, e.g. "repository 158f497f successfully created."
+#: Rustic 0.12.0's line after a successful `init`, e.g. "repository 158f497f successfully created."
 _INIT_CREATED = re.compile(r"repository \S+ successfully created")
-#: Rustic 0.11.4's refusal of `init` when the repository is already there (exit status 1).
+#: Rustic 0.12.0's refusal of `init` when the repository is already there (exit status 1).
 _INIT_EXISTS = re.compile(r"Config file already exists\. Aborting\.")
 _NO_RETRY = {Reason.TIMEOUT, Reason.SCOPE_VIOLATION, Reason.REMOVAL_LIMIT, Reason.SPAWN_ERROR}
 _AFTER_BACKUP_ORDER = (Operation.CHECK, Operation.FORGET, Operation.SNAPSHOTS)

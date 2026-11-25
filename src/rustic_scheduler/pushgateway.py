@@ -1,6 +1,6 @@
 """Checks that Rustic's own metrics really reached the Pushgateway.
 
-Rustic 0.11.4 pushes its `rustic_backup_*` gauges with one protobuf POST per
+Rustic 0.12.0 pushes its `rustic_backup_*` gauges with one protobuf POST per
 snapshot and only logs a warning when that fails; the backup still exits 0. So
 delivery is verified here by asking the Pushgateway, never inferred.
 

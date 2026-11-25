@@ -85,7 +85,7 @@ async def test_rustic_pushes_its_own_metrics_and_delivery_is_verified(real, push
         assert name in samples, f"{name} was not pushed"
     (files_new,) = samples["rustic_backup_files_new"]
     assert files_new.value == result.data["files_new"] == 2
-    # Grouping key chosen by Rustic 0.11.4.
+    # Grouping key chosen by Rustic 0.12.0.
     assert files_new.labels["job"] == "rustic_backup"
     assert files_new.labels["snapshot_label"] == "docs"
     assert files_new.labels["hostname"] == "testhost"
@@ -934,7 +934,7 @@ def test_daemon_refuses_to_start_with_a_broken_configuration(real):
 
 
 def test_summary_fixture_matches_the_real_binary(real):
-    """The unit tests' canned summary has exactly the fields Rustic 0.11.4 emits."""
+    """The unit tests' canned summary has exactly the fields Rustic 0.12.0 emits."""
     done = subprocess.run(
         [real.binary, "-P", str(real.profiles / "repo.toml"), "--json-progress", "backup", str(real.source)],
         env=real.env, capture_output=True, text=True, check=True,
@@ -944,7 +944,7 @@ def test_summary_fixture_matches_the_real_binary(real):
     assert set(summary) == set(SUMMARY)
     status = next(m for m in messages if m["message_type"] == "status")
     assert set(status) <= {"message_type", "seconds_elapsed", "seconds_remaining", "percent_done",
-                           "total_bytes", "bytes_done"}  # fmt: skip
+                           "total_bytes", "bytes_done", "error_count"}  # fmt: skip
     assert 0 <= status["percent_done"] <= 1
 
 
@@ -956,6 +956,6 @@ async def test_push_is_verified_even_when_no_snapshot_is_saved(real, pushgateway
     await run(engine)
     await asyncio.sleep(1.5)
     second = await run(engine)
-    # Rustic 0.11.4 pushes its metrics for an unchanged source too.
+    # Rustic 0.12.0 pushes its metrics for an unchanged source too.
     assert second.data["snapshots_saved"] == 0
     assert second.data["pushgateway"]["result"] == "delivered"

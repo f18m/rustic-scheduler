@@ -175,7 +175,8 @@ Prune acts on the **whole repository**, including data of other jobs and of snap
 outside the scheduler. Unused data of one job is removed whichever job's prune runs.
 
 Rustic prunes in two steps: packs are first marked, and deleted by a later prune once they
-have been marked for `--keep-delete` (default 23 hours). One prune therefore frees nothing
+have been marked for `--keep-marked` (default 23 hours; Rustic before 0.12.0 called it
+`--keep-delete`). One prune therefore frees nothing
 immediately. `--instant-delete` skips this and is only safe when nothing else uses the
 repository.
 

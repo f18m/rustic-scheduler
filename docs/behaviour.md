@@ -103,13 +103,17 @@ Each result also carries a `reason` from a small fixed list, the exit status, th
 attempts and free-text detail. Detail is available from `/api/v1/status`, `status`, MQTT and
 the run log; it is never a metric label.
 
-**Why the exit status is not enough.** Rustic 0.11.4 handles SIGINT and SIGTERM by logging
+**Why the exit status is not enough.** Rustic 0.12.0 handles SIGINT and SIGTERM by logging
 `Ctrl-C received, shutting down...` and exiting with status 0, having written no snapshot.
 The scheduler therefore requires the JSON `summary` message for a backup to succeed, and
 treats that log line, or a stop it requested itself, as an interruption for every operation.
 
 A backup that exits 0 with a summary but saves no snapshot (unchanged source with
 `skip-if-unchanged`) is `succeeded`, with `backup_last_snapshots_saved` at 0.
+
+A backup that could not read a source file is `failed`, with reason `exit_code` and status 3.
+Rustic 0.12.0 still saves a snapshot without the unreadable file, so that snapshot exists but is
+not complete. The scheduler judges the run by the exit status and does not inspect the snapshot.
 
 ## Timeouts, shutdown and interruption
 

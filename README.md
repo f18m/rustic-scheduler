@@ -27,7 +27,7 @@ backups on a schedule and tells you, truthfully, what happened.
 - Optional snapshot telemetry, retention (`forget`), `prune` and `check`.
 - No database. History lives in Rustic's snapshots (and in Prometheus if you use it).
 
-Rustic runs as an external process: the pinned release is **Rustic 0.11.4**, unmodified.
+Rustic runs as an external process: the pinned release is **Rustic 0.12.0**, unmodified.
 
 
 ## 💡 Why?

@@ -9,4 +9,4 @@ except PackageNotFoundError:  # a source tree that was never installed
     __version__ = "0.0.0.dev0"
 
 #: Rustic release this version was verified against.
-SUPPORTED_RUSTIC_VERSION = "0.11.4"
+SUPPORTED_RUSTIC_VERSION = "0.12.0"
