@@ -56,6 +56,11 @@ and the last error lines; for a succeeded backup the file counts and bytes added
 the number of snapshots removed and kept. Apprise's notification type is `success`, `warning`
 (skipped), `failure`, or `info` for the start-up notification.
 
+Numbers are rounded for reading: powers of 1000, one decimal below 10 and whole numbers above.
+`359486 unmodified` is shown as `359k unmodified`, and `86136747 bytes` as `86Mbytes`. Below 1000
+bytes the plain number is shown (`800 bytes`). The metrics and MQTT messages keep the exact
+values.
+
 If the [web interface](web.md) is enabled and `web.public_url` is set, the last line of every
 notification, start-up included, is `Web UI: <public_url>`. Without either, there is no link.
 

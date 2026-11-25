@@ -263,7 +263,7 @@ reason; retries; after-backup ordering and its skip rules; all forget safeguards
 queueing, lock time-outs and the external lock file; shutdown; crash recovery and state
 restore; on-time, late, missed and collapsed runs with a controllable clock; catch-up
 evidence rules; metric label bounds and unknown-as-absent; notification selection, retry and
-time-out; notification icons and the web link; the start-up log line and start-up notification; Pushgateway verification results; health and readiness following the loop; the
+time-out; notification icons, the web link and rounded counts and sizes; the start-up log line and start-up notification; Pushgateway verification results; health and readiness following the loop; the
 network port being unable to start jobs; MQTT queueing without a broker; secret masking; MQTT
 command validation and refusals; the content of the Home Assistant discovery messages.
 

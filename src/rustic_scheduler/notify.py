@@ -54,6 +54,26 @@ def body_text(lines: list[str], web_url: str | None) -> str:
     return REDACTOR("\n".join(lines))
 
 
+_PREFIXES = ("", "k", "M", "G", "T", "P")
+
+
+def _human(value: object, unit: str = "") -> str:
+    """A Rustic count in powers of 1000: ``359486`` is ``359k``, and with a unit ``86136747`` is
+    ``86Mbytes``. Below 10 a scaled figure keeps one decimal (``1.5M``). A value that is not a
+    whole number is ``?``, never zero.
+    """
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        return "?"
+    scaled, step = float(value), 0
+    while scaled >= 999.5 and step < len(_PREFIXES) - 1:
+        scaled /= 1000
+        step += 1
+    if step == 0:
+        return f"{value} {unit}".strip()
+    text = (f"{scaled:.1f}" if scaled < 10 else f"{scaled:.0f}").removesuffix(".0")
+    return f"{text}{_PREFIXES[step]}{unit}"
+
+
 def render(result: OperationResult, web_url: str | None = None) -> tuple[str, str]:
     """Title and body. Contains no secrets, paths of sources or command lines."""
     title = f"{result.operation} {result.outcome}: {result.job}"
@@ -67,14 +87,16 @@ def render(result: OperationResult, web_url: str | None = None) -> tuple[str, st
         lines.append(f"Rustic exit status: {result.exit_code}")
     data = result.data
     if result.outcome == Outcome.SUCCEEDED and result.operation == Operation.BACKUP:
-        lines.append(
-            f"Files: {data.get('files_new', '?')} new, {data.get('files_changed', '?')} changed, "
-            f"{data.get('files_unmodified', '?')} unmodified"
+        new, changed, unmodified = (
+            _human(data.get(key)) for key in ("files_new", "files_changed", "files_unmodified")
         )
-        lines.append(f"Added to repository: {data.get('data_added_packed', '?')} bytes")
+        lines.append(f"Files: {new} new, {changed} changed, {unmodified} unmodified")
+        lines.append(f"Added to repository: {_human(data.get('data_added_packed'), 'bytes')}")
     if result.operation == Operation.FORGET and "removed" in data:
         verb = "would remove" if result.dry_run else "removed"
-        lines.append(f"Snapshots: {verb} {data['removed']}, kept {data.get('kept', '?')}")
+        lines.append(
+            f"Snapshots: {verb} {_human(data['removed'])}, kept {_human(data.get('kept'))}"
+        )
     if result.detail:
         lines.append(f"Detail: {result.detail}")
     return title, body_text(lines, web_url)
