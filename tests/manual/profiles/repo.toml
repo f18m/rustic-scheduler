@@ -1,0 +1,5 @@
+# Rustic profile for `just manual`. The repository and its password are throwaway files
+# under /tmp/rustic-scheduler-manual, created by the recipe in the justfile.
+[repository]
+repository = "/tmp/rustic-scheduler-manual/repo"
+password-file = "/tmp/rustic-scheduler-manual/password"

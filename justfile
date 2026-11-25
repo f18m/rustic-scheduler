@@ -35,6 +35,10 @@ test-strict:
 e2e:
     ./tests/e2e/run.sh
 
+# Stop and remove the e2e containers and volumes, including those left by `tests/e2e/run.sh --keep`
+e2e-down:
+    docker compose -f tests/e2e/compose.e2e.yaml down -v --remove-orphans
+
 # Build the container image for the local architecture
 build tag="rustic-scheduler:dev":
     docker build --build-arg VERSION="$(./scripts/version.sh)" -f docker/Dockerfile -t {{tag}} .
@@ -50,6 +54,17 @@ version:
 # Validate a configuration file with the local Rustic binary
 validate config="examples/config.yaml":
     uv run rustic-scheduler -c {{config}} validate
+
+# Run the scheduler with its web interface on a throwaway repository (needs `just setup`)
+manual-test:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    dir=/tmp/rustic-scheduler-manual
+    mkdir -p "$dir/src" "$dir/repo"
+    [ -f "$dir/password" ] || echo "manual-test-password" > "$dir/password"
+    [ -f "$dir/src/file.txt" ] || echo hello > "$dir/src/file.txt"
+    [ -f "$dir/repo/config" ] || .tools/rustic -P tests/manual/profiles/repo.toml init
+    uv run rustic-scheduler -c tests/manual/config.yaml run
 
 # Everything CI runs
 ci: lint test-strict e2e

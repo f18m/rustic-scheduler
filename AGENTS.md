@@ -21,6 +21,7 @@ just test-unit    # unit tests: no Rustic binary, no Docker
 just test         # unit + integration; integration tests skip without .tools/rustic or Docker
 just test-strict  # same, but a missing Rustic or Docker is an error (what CI runs)
 just e2e          # build the image, run it with Pushgateway and Prometheus
+just e2e-down     # remove the e2e containers and volumes (e.g. after `tests/e2e/run.sh --keep`)
 ```
 
 Run `just lint` and `just test-strict` before calling a change done. Python >= 3.12, managed

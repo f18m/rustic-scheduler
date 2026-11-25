@@ -105,6 +105,9 @@ async def test_page_and_assets_are_served_with_a_strict_policy(site):
     assert text.count("<script") == 1 and '<script src="app.js">' in text
     assert "Using Rustic directly" in text and "has not tested a Glacier" in text
     assert '<link rel="icon" type="image/svg+xml" href="favicon.svg">' in text
+    assert (
+        '<div class="brand">\n      <img src="favicon.svg" width="32" height="32" alt="">' in text
+    )
     # One tab per section, each with its panel.
     for tab in ("jobs", "snapshots", "history", "next", "manual"):
         assert f'id="tab-{tab}" aria-controls="panel-{tab}"' in text

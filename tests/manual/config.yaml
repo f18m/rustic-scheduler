@@ -1,0 +1,18 @@
+# Configuration for `just manual`: the web interface on a throwaway repository.
+# Paths are relative to the repository root (the directory `just` runs in), except the
+# sources and the repository, which live under /tmp/rustic-scheduler-manual.
+scheduler:
+  timezone: UTC
+  state_dir: /tmp/rustic-scheduler-manual/state
+rustic:
+  binary: .tools/rustic
+  profile_dir: tests/manual/profiles
+web:
+  enabled: true
+  port: 9301
+  operations: [backup, check]
+jobs:
+  demo:
+    profiles: [repo]
+    sources: [/tmp/rustic-scheduler-manual/src]
+    schedule: {days: daily, times: ["02:30"]}
