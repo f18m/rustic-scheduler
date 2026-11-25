@@ -1,0 +1,22 @@
+scheduler:
+  timezone: Europe/Rome
+  log_level: INFO
+
+web:
+  enabled: true
+  port: 9301
+  operations: [backup, check]
+
+jobs:
+  mydata:
+    profiles: [myrepo]
+    sources: [/data/src]              # your data folder (see compose.yaml)
+    schedule:
+      days: daily
+      times: ["02:30"]
+    forget:
+      enabled: true
+      dry_run: false
+      keep:
+        keep-daily: 14
+        keep-weekly: 8

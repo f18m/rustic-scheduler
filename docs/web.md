@@ -66,11 +66,12 @@ Then one row per operation that is enabled for it, in the order `init`, `backup`
 - **Next run**, when idle and scheduled.
 - **Last result**: outcome, time and duration; the reason when it did not succeed; and the
   last skipped run, if any.
-- **Run now**, for the operations listed in `web.operations`.
+- **Run now**, for the operations listed in `web.operations`. The button of a destructive
+  operation (`forget`, `prune`) is red.
 - **Output** while the operation runs, **Last output** otherwise: opens its run's output
   (see [Run output](#run-output)).
 
-Listing snapshots is not a row. Under the table, a 📂 icon (tooltip "Browse snapshots") opens
+Listing snapshots is not a row. A "Browse snapshots" button at the top right of each job opens
 the Snapshots tab with that job chosen.
 
 The page refreshes itself every three seconds (jobs, recent and next runs; not the snapshots).

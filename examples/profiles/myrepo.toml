@@ -1,0 +1,3 @@
+[repository]
+repository = "/var/lib/rustic-scheduler/repo"
+password-file = "/run/secrets/rustic_password"

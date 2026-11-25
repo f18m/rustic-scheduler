@@ -136,13 +136,11 @@ context.data = {
 vm.runInContext("renderJobs(data)", context);
 const card = getElementById("jobs").children[0];
 assert.deepEqual(find(card, "tbody").children.map((row) => row.children[0].textContent), ["backup"]);
-const browseLink = card.children.at(-1).children[0];
-assert.equal(browseLink.tag, "a");
-assert.equal(browseLink.title, "Browse snapshots");
-assert.equal(browseLink.attributes["aria-label"], "Browse snapshots of docs");
-let followed = false;
-browseLink.events.click({ preventDefault() { followed = true; } });
-assert.equal(followed, true, "the link does not navigate by itself");
+const browseButton = card.children[0].children[2];
+assert.equal(browseButton.tag, "button");
+assert.equal(browseButton.textContent, "Browse snapshots");
+assert.equal(browseButton.attributes["aria-label"], "Browse snapshots of docs");
+browseButton.events.click({});
 assert.equal(vm.runInContext("browse.job", context), "docs");
 assert.equal(getElementById("browse-job").value, "docs");
 assert.equal(context.location.hash, "#snapshots");

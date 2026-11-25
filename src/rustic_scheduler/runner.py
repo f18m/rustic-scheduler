@@ -133,10 +133,12 @@ async def run_process(
     """
     result = ProcessResult()
     sink: IO[str] | None = None
+    command_line = REDACTOR(shlex.join(argv))
+    log.info("running: %s", command_line)
     if log_file is not None:
         try:
             sink = _open_log(log_file)
-            sink.write(f"$ {REDACTOR(shlex.join(argv))}\n")
+            sink.write(f"$ {command_line}\n")
             sink.flush()
         except OSError as exc:
             log.warning("cannot write run log %s: %s", log_file, exc.strerror or exc)

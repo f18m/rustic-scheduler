@@ -231,7 +231,7 @@ detected.
 Not checked: a person clicking in a browser window (in the manual run the clicks were sent
 by script, and only for "Run now" on a backup, the tabs and the snapshot browser); the
 confirmation dialog of `forget` and `prune`; the copy buttons; keyboard navigation of the
-tabs; how browsers show the icon; browsers other than Chrome; the page behind a reverse
+tabs; how browsers show the buttons; browsers other than Chrome; the page behind a reverse
 proxy; progress display for operations other than backup; snapshots with very many files in
 one directory, on a slow or remote repository, or in a repository with cold storage.
 
@@ -279,7 +279,7 @@ before sending.
 
 The web page's jobs table is checked in a simulated DOM, not in a browser: the Description
 column, its links and the confirmation text, the order of its rows, the missing snapshots row,
-and the Browse snapshots icon that opens the Snapshots tab for a job. The links were fetched
+and the Browse snapshots button that opens the Snapshots tab for a job. The links were fetched
 once to confirm that they exist; they point at Rustic's online book, which may describe a
 newer Rustic than 0.12.0.
 

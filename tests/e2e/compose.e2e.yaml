@@ -32,7 +32,7 @@ services:
     command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus"]
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ../../examples/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
     ports: ["127.0.0.1::9090"]
 
 secrets:
